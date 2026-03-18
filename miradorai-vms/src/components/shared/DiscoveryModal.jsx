@@ -57,12 +57,11 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
 
       setDiscoveredDevices(devices);
       setStatusMessage(
-        `Found ${devices.length} camera${devices.length !== 1 ? "s" : ""}`
+        `Found ${data.devices?.length || 0} camera${data.devices?.length !== 1 ? "s" : ""}`
       );
       setProgress(100);
       setHasScanned(true);
     } catch (err) {
-      console.error("[Discovery] Error:", err);
       setError(err.message || "Failed to discover devices");
       setStatusMessage("Scan failed");
       setHasScanned(true);
