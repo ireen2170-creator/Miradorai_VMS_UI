@@ -1,22 +1,91 @@
 """
 ONVIF Device Discovery Service
-Uses WS-Discovery and subnet scanning to find cameras on the network
+Auto-detects network subnet and finds real ONVIF cameras
 """
 
 import socket
 import re
+import subprocess
+import ipaddress
 from datetime import datetime
+
+
+def get_local_subnet() -> str:
+    """
+    Auto-detect the local network subnet by checking active network interfaces.
+    Returns the subnet (e.g., "192.168.1")
+    """
+    try:
+        # Try to get active network interfaces
+        if socket.has_ipv6:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+        else:
+            local_ip = socket.gethostbyname(socket.gethostname())
+        
+        # Get first 3 octets (subnet)
+        parts = local_ip.split('.')
+        subnet = '.'.join(parts[:3])
+        print(f"[DISCOVERY] Detected local subnet: {subnet}.x (local IP: {local_ip})")
+        return subnet
+    except Exception as e:
+        print(f"[DISCOVERY] Could not detect subnet: {e}, defaulting to 192.168.1")
+        return "192.168.1"
+
+
+def probe_onvif_device(ip: str, port: int = 80, username: str = "", password: str = "") -> dict | None:
+    """
+    Probe a device at given IP to get real ONVIF information AND stream URL.
+    Returns device info with RTSP stream URI or None if not accessible.
+    
+    Args:
+        ip: Camera IP address
+        port: ONVIF service port (default 80)
+        username: ONVIF credentials (optional)
+        password: ONVIF credentials (optional)
+    """
+    try:
+        from onvif_service import probe_camera
+        
+        # Try to probe with provided credentials
+        result = probe_camera(ip, port, username, password)
+        
+        if result.get("success"):
+            # Extract RTSP URL and clean it
+            rtsp_url = result.get('stream_uri', '')
+            
+            # Clean up RTSP URL (remove ONVIF-specific params)
+            import re
+            rtsp_url = re.sub(r"[&?]proto=Onvif", "", rtsp_url)
+            
+            device_info = {
+                'id': f"device-{ip}",
+                'ip': ip,
+                'mac': result.get('serial', 'Unknown'),
+                'status': 'online',
+                'manufacturer': result.get('manufacturer', 'Unknown'),
+                'model': result.get('model', 'Unknown'),
+                'firmware': result.get('firmware', ''),
+                'rtsp_url': rtsp_url,
+                'stream_uri': rtsp_url,
+                'discovered_at': datetime.utcnow().isoformat()
+            }
+            
+            print(f"[DISCOVERY] ✓ Probed {ip}: {result.get('manufacturer')} {result.get('model')}")
+            if rtsp_url:
+                print(f"[DISCOVERY]   RTSP: {rtsp_url}")
+            
+            return device_info
+    except Exception as e:
+        print(f"[DISCOVERY] Could not probe {ip}: {e}")
+    
+    return None
 
 
 def discover_onvif_devices(timeout: int = 10) -> list:
     """
-    Discover ONVIF-compatible devices on the network using WS-Discovery.
-    
-    Args:
-        timeout: Socket timeout in seconds
-    
-    Returns:
-        List of discovered devices with IP, MAC, manufacturer, model, status
+    Discover ONVIF-compatible devices on the network using WS-Discovery multicast.
+    Returns real device information from actual cameras found.
     """
     discovered_devices = {}
     
@@ -50,7 +119,7 @@ def discover_onvif_devices(timeout: int = 10) -> list:
         MCAST_GRP = '239.255.255.250'
         MCAST_PORT = 3702
         
-        # Send probe message
+        print("[DISCOVERY] Sending WS-Discovery probe to multicast...")
         sock.sendto(probe_message, (MCAST_GRP, MCAST_PORT))
         
         # Receive responses
@@ -69,25 +138,16 @@ def discover_onvif_devices(timeout: int = 10) -> list:
                     endpoint_match = re.search(r'<a:Address>(http[^<]+)</a:Address>', xml_data)
                     if endpoint_match:
                         endpoint = endpoint_match.group(1)
-                        
-                        # Extract MAC if present
-                        mac_match = re.search(r'/([0-9A-Fa-f]{2}(?:[0-9A-Fa-f]{2}){5})', endpoint)
-                        mac = mac_match.group(1).upper() if mac_match else "Unknown"
-                        
-                        # Create unique device entry
                         device_id = f"device-{ip}"
                         
                         if device_id not in discovered_devices:
-                            discovered_devices[device_id] = {
-                                'id': device_id,
-                                'ip': ip,
-                                'mac': mac,
-                                'status': 'online',
-                                'manufacturer': 'ONVIF Device',
-                                'model': 'Unknown',
-                                'discovered_at': datetime.utcnow().isoformat()
-                            }
-                            print(f"[DISCOVERY] Found ONVIF device at {ip}")
+                            print(f"[DISCOVERY] Found WS-Discovery response from {ip}, probing for details...")
+                            
+                            # Probe the device to get real information
+                            device_info = probe_onvif_device(ip)
+                            if device_info:
+                                discovered_devices[device_id] = device_info
+                                print(f"[DISCOVERY] ✓ {device_info['manufacturer']} {device_info['model']} at {ip}")
                 except Exception as e:
                     print(f"[DISCOVERY] Error parsing response: {e}")
                     continue
@@ -98,31 +158,42 @@ def discover_onvif_devices(timeout: int = 10) -> list:
     
     except Exception as e:
         print(f"[DISCOVERY] WS-Discovery error: {e}")
-        return []
     
     return list(discovered_devices.values())
 
 
-def discover_onvif_devices_simple(timeout: int = 5, subnet: str = "192.168.1") -> list:
+def discover_onvif_devices_simple(timeout: int = 5, username: str = "", password: str = "") -> list:
     """
-    Simple ONVIF discovery by scanning common ports in a subnet.
-    Fallback method if WS-Discovery doesn't work.
+    Fallback method: Scan the local subnet for devices with open ONVIF ports.
+    Auto-detects local subnet - no hardcoding.
+    Probes found devices to get real ONVIF information.
     
     Args:
         timeout: Socket timeout in milliseconds per port
-        subnet: Subnet to scan (e.g., "192.168.1")
-    
-    Returns:
-        List of devices found by checking common ONVIF ports
+        username: ONVIF credentials (optional)
+        password: ONVIF credentials (optional)
     """
     discovered_devices = []
+    
+    # Auto-detect local subnet
+    subnet = get_local_subnet()
     
     # Common ONVIF/video ports
     ports = [80, 8080, 8081, 8888, 554]
     
+    print(f"[DISCOVERY] Scanning subnet {subnet}.x for devices on ports {ports}...")
+    if username:
+        print(f"[DISCOVERY] Using credentials (username: {username})")
+    
+    scanned_ips = set()
+    
     # Scan the subnet
     for i in range(1, 255):
         ip = f"{subnet}.{i}"
+        
+        if ip in scanned_ips:
+            continue
+        scanned_ips.add(ip)
         
         for port in ports:
             try:
@@ -134,18 +205,32 @@ def discover_onvif_devices_simple(timeout: int = 5, subnet: str = "192.168.1") -
                 
                 # If connection succeeds, port is open
                 if result == 0:
-                    # Check if we already added this IP
-                    if not any(d['ip'] == ip for d in discovered_devices):
-                        discovered_devices.append({
-                            'id': f"device-{ip}",
-                            'ip': ip,
-                            'mac': "Unknown",
-                            'status': 'online',
-                            'manufacturer': 'Network Device',
-                            'model': f"Port {port}",
-                            'discovered_at': datetime.utcnow().isoformat()
-                        })
-                        print(f"[DISCOVERY] Found device at {ip}:{port}")
+                    print(f"[DISCOVERY] Found open port at {ip}:{port}, probing...")
+                    
+                    # Try to probe for real ONVIF info with credentials
+                    device_info = probe_onvif_device(ip, port, username, password)
+                    
+                    if device_info:
+                        # Only add if we got real info
+                        if not any(d['ip'] == ip for d in discovered_devices):
+                            discovered_devices.append(device_info)
+                            print(f"[DISCOVERY] ✓ Added {device_info['manufacturer']} {device_info['model']} at {ip}")
+                    else:
+                        # Add as generic device if probe failed but port is open
+                        if not any(d['ip'] == ip for d in discovered_devices):
+                            discovered_devices.append({
+                                'id': f"device-{ip}",
+                                'ip': ip,
+                                'mac': "Unknown",
+                                'status': 'online',
+                                'manufacturer': 'Network Device',
+                                'model': f"Port {port}",
+                                'discovered_at': datetime.utcnow().isoformat()
+                            })
+                            print(f"[DISCOVERY] ⚠ Added generic device at {ip}:{port}")
+                    
+                    # Move to next IP once we found a device on this one
+                    break
             except Exception:
                 pass
     

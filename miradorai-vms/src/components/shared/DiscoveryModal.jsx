@@ -9,6 +9,8 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
   const [statusMessage, setStatusMessage] = useState("Initializing network scan...");
   const [error, setError] = useState(null);
   const [hasScanned, setHasScanned] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
   // Simulate network discovery
   const startDiscovery = async () => {
@@ -28,10 +30,16 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      // Try to call backend API
+      // Try to call backend API with credentials
       let devices = [];
       try {
-        const response = await fetch("http://localhost:8000/api/discover-devices", {
+        const params = new URLSearchParams();
+        if (username) params.append('username', username);
+        if (password) params.append('password', password);
+        
+        const url = `http://localhost:8000/api/discover-devices${params.toString() ? '?' + params.toString() : ''}`;
+        
+        const response = await fetch(url, {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         });
@@ -44,12 +52,7 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
           console.log("[Discovery] Backend returned non-OK status:", response.status);
         }
       } catch (fetchErr) {
-        console.log("[Discovery] Backend API failed, using mock data:", fetchErr.message);
-      }
-
-      // If no devices from backend, use mock data
-      if (devices.length === 0) {
-        devices = getMockDevices();
+        console.log("[Discovery] Backend API failed:", fetchErr.message);
       }
 
       setDiscoveredDevices(devices);
@@ -169,6 +172,30 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
                 <br />
                 This typically takes 20-30 seconds.
               </div>
+              
+              <div className="discovery-credentials">
+                <label className="discovery-cred-label">
+                  <span>Username (optional)</span>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="admin"
+                    className="discovery-cred-input"
+                  />
+                </label>
+                <label className="discovery-cred-label">
+                  <span>Password (optional)</span>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="password"
+                    className="discovery-cred-input"
+                  />
+                </label>
+              </div>
+              
               <button className="discovery-start-btn" onClick={startDiscovery}>
                 <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14">
                   <path d="M8 5v14l11-7z" />

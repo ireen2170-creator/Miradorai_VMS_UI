@@ -222,28 +222,72 @@ export default function AddDevicesPage() {
     setEnrollMsg(`Adding ${discoveredDevices.length} device${discoveredDevices.length > 1 ? 's' : ''}…`);
     setShowDiscovery(false);
 
-    const newDevices = discoveredDevices.map((d) => ({
-      id:            String(Date.now()) + Math.random(),
-      type:          "entrance",
-      name:          d.name || `Camera @ ${d.ip}`,
-      ip:            d.ip,
-      mac:           d.mac || "—",
-      status:        d.status || "Unknown",
-      manufacturer:  d.manufacturer || "Unknown",
-      model:         d.model || "Unknown",
-      rtsp_url:      null,
-      ws_url:        null,
-      stream_key:    null,
-      stream_status: "pending",
-      source:        "onvif",
-    }));
+    // Process each discovered device
+    (async () => {
+      for (const d of discoveredDevices) {
+        const device = {
+          id:            String(Date.now()) + Math.random(),
+          type:          "entrance",
+          name:          d.name || `${d.manufacturer} ${d.model}` || `Camera @ ${d.ip}`,
+          ip:            d.ip,
+          mac:           d.mac || "—",
+          status:        "Online",
+          manufacturer:  d.manufacturer || "Unknown",
+          model:         d.model || "Unknown",
+          rtsp_url:      d.rtsp_url || null,
+          stream_uri:    d.stream_uri || null,
+          ws_url:        null,
+          stream_key:    null,
+          stream_status: "pending",
+          source:        "onvif",
+        };
 
-    setDevices((prev) => [...prev, ...newDevices]);
-    setTimeout(() => {
-      setEnrolling(false);
-      setEnrollMsg("");
-    }, 1000);
+        // If device has RTSP URL, register it with OME
+        if (d.rtsp_url) {
+          try {
+            const registerRes = await fetch(`${STREAM_API}/api/streams/register`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ rtsp_url: d.rtsp_url }),
+            });
+            
+            if (registerRes.ok) {
+              const registerData = await registerRes.json();
+              device.ws_url = registerData.ws_url || null;
+              device.stream_key = registerData.stream_key || null;
+              device.stream_status = registerData.status || "pending";
+              console.log(`[AddDevices] Registered ${d.ip} with OME`);
+            }
+          } catch (err) {
+            console.log(`[AddDevices] Could not register ${d.ip}:`, err.message);
+          }
+        }
+
+        setDevices((prev) => [...prev, device]);
+      }
+      
+      setTimeout(() => {
+        setEnrolling(false);
+        setEnrollMsg("");
+      }, 1000);
+    })();
   }, [setDevices]);
+
+  const handleEnrollSelected = async () => {
+    const devicesToEnroll = devices.filter((d) => checked.includes(d.id));
+    if (devicesToEnroll.length === 0) return;
+
+    setEnrolling(true);
+    setEnrollMsg(`Enrolling ${devicesToEnroll.length} device${devicesToEnroll.length > 1 ? 's' : ''}…`);
+
+    for (const device of devicesToEnroll) {
+      await handleEnroll(device);
+    }
+
+    setEnrolling(false);
+    setEnrollMsg("");
+    setChecked([]);
+  };
 
   const handleEnroll = async (device) => {
     setEnrolling(true);
@@ -456,7 +500,8 @@ export default function AddDevicesPage() {
         <Button
           label={checked.length > 0 ? `Enroll ${checked.length} Device${checked.length > 1 ? "s" : ""}` : "Enroll"}
           variant="primary"
-          disabled={checked.length === 0}
+          disabled={checked.length === 0 || enrolling}
+          onClick={handleEnrollSelected}
         />
       </div>
 

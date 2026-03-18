@@ -129,6 +129,49 @@
   color: var(--text-muted);
   line-height: 1.6;
   max-width: 300px;
+  margin-bottom: 16px;
+}
+
+.discovery-credentials {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+  width: 100%;
+  max-width: 280px;
+}
+
+.discovery-cred-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.discovery-cred-label span {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.discovery-cred-input {
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 5px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.discovery-cred-input:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+}
+
+.discovery-cred-input::placeholder {
+  color: var(--text-muted);
 }
 
 .discovery-start-btn {

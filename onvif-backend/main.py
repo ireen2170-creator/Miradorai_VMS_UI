@@ -218,22 +218,27 @@ async def onvif_probe(req: ProbeRequest):
 # NEW: Discover ONVIF devices on network using WS-Discovery
 # ------------------------------------------------------------------
 @app.get("/api/discover-devices")
-async def discover_devices():
+async def discover_devices(username: str = "", password: str = ""):
     """
     Auto-discover ONVIF cameras on the network.
-    Uses WS-Discovery protocol with fallback to subnet scanning.
+    Automatically detects local subnet and finds real cameras.
+    Uses optional credentials to probe cameras for detailed info.
+    
+    Query params:
+      username: ONVIF camera username (optional)
+      password: ONVIF camera password (optional)
     """
     try:
-        print("[DISCOVERY] Starting ONVIF device discovery...")
+        print(f"[DISCOVERY] Starting ONVIF device discovery (creds: {bool(username)})")
         
         # Try WS-Discovery first (faster, more reliable)
         devices = await asyncio.to_thread(discover_onvif_devices, 10)
         print(f"[DISCOVERY] WS-Discovery found {len(devices)} device(s)")
         
-        # If WS-Discovery fails, fall back to subnet scanning
+        # If WS-Discovery fails, fall back to subnet scanning with auto-detection
         if not devices:
             print("[DISCOVERY] WS-Discovery found no devices, trying subnet scan...")
-            devices = await asyncio.to_thread(discover_onvif_devices_simple, 5, "192.168.1")
+            devices = await asyncio.to_thread(discover_onvif_devices_simple, 5, username, password)
             print(f"[DISCOVERY] Subnet scan found {len(devices)} device(s)")
         
         print(f"[DISCOVERY] Returning {len(devices)} device(s) to frontend")
