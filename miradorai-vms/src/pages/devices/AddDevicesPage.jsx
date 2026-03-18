@@ -6,6 +6,7 @@ import SearchBar from "../../components/shared/SearchBar";
 import StatusBadge from "../../components/shared/StatusBadge";
 import ManualSearchModal from "./ManualSearchModal";
 import StreamURLModal from "./StreamURLModal";
+import DiscoveryModal from "../../components/shared/DiscoveryModal";
 import "./AddDevicesPage.css";
 
 const STREAM_API = "http://localhost:8000";
@@ -169,6 +170,7 @@ export default function AddDevicesPage() {
   const [checked, setChecked]                   = useState([]);
   const [showManualSearch, setShowManualSearch] = useState(false);
   const [showStreamURL, setShowStreamURL]       = useState(false);
+  const [showDiscovery, setShowDiscovery]       = useState(false);
   const [enrolling, setEnrolling]               = useState(false);
   const [enrollMsg, setEnrollMsg]               = useState("");
   const [refreshing, setRefreshing]             = useState(false);
@@ -211,6 +213,36 @@ export default function AddDevicesPage() {
   const handleRemoveDevice = useCallback((deviceId) => {
     setDevices((prev) => prev.filter((d) => d.id !== deviceId));
     setChecked((prev) => prev.filter((id) => id !== deviceId));
+  }, [setDevices]);
+
+  const handleDiscoveredDevices = useCallback((discoveredDevices) => {
+    if (!discoveredDevices || discoveredDevices.length === 0) return;
+    
+    setEnrolling(true);
+    setEnrollMsg(`Adding ${discoveredDevices.length} device${discoveredDevices.length > 1 ? 's' : ''}…`);
+    setShowDiscovery(false);
+
+    const newDevices = discoveredDevices.map((d) => ({
+      id:            String(Date.now()) + Math.random(),
+      type:          "entrance",
+      name:          d.name || `Camera @ ${d.ip}`,
+      ip:            d.ip,
+      mac:           d.mac || "—",
+      status:        d.status || "Unknown",
+      manufacturer:  d.manufacturer || "Unknown",
+      model:         d.model || "Unknown",
+      rtsp_url:      null,
+      ws_url:        null,
+      stream_key:    null,
+      stream_status: "pending",
+      source:        "onvif",
+    }));
+
+    setDevices((prev) => [...prev, ...newDevices]);
+    setTimeout(() => {
+      setEnrolling(false);
+      setEnrollMsg("");
+    }, 1000);
   }, [setDevices]);
 
   const handleEnroll = async (device) => {
@@ -323,6 +355,11 @@ export default function AddDevicesPage() {
             onClick={() => setShowManualSearch(true)}
           />
           <Button
+            label="Network Discovery"
+            icon={`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="9"/><path d="M12 2v20"/><path d="M2 12h20"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>`}
+            onClick={() => setShowDiscovery(true)}
+          />
+          <Button
             label="Stream URL"
             icon={`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`}
             onClick={() => setShowStreamURL(true)}
@@ -425,6 +462,9 @@ export default function AddDevicesPage() {
 
       {showManualSearch && (
         <ManualSearchModal onClose={() => setShowManualSearch(false)} onEnroll={handleEnroll} />
+      )}
+      {showDiscovery && (
+        <DiscoveryModal isOpen={showDiscovery} onClose={() => setShowDiscovery(false)} onAddDevices={handleDiscoveredDevices} />
       )}
       {showStreamURL && (
         <StreamURLModal onClose={() => setShowStreamURL(false)} onAdd={handleAddStreamURLs} />
