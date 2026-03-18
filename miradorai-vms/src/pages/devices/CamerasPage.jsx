@@ -15,7 +15,7 @@ function saveDevices(devices) {
   try { localStorage.setItem("miradorai_devices", JSON.stringify(devices)); } catch {}
 }
 
-export default function CamerasPage() {
+export default function CamerasPage({ onCameraSelect }) {
   const [cameras, setCameras] = useState(loadDevices);
   const [filter, setFilter]         = useState("");
   const [selected, setSelected]     = useState(null);
@@ -129,7 +129,14 @@ export default function CamerasPage() {
                 <tr
                   key={c.id}
                   className={`m-table__row ${isSel ? "m-table__row--selected" : ""}`}
-                  onClick={() => setSelected(isSel ? null : String(c.id))}
+                  onClick={() => {
+                    setSelected(isSel ? null : String(c.id));
+                    if (!isSel && onCameraSelect) {
+                      onCameraSelect(c);
+                    } else if (isSel && onCameraSelect) {
+                      onCameraSelect(null);
+                    }
+                  }}
                   onDoubleClick={() => openEdit(c)}
                 >
                   {/* Thumbnail */}

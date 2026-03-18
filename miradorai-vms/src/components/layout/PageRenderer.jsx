@@ -52,7 +52,7 @@ const MAP = {
   "live-view":            LiveViewPage,
 };
 
-export default function PageRenderer({ activePage }) {
+export default function PageRenderer({ activePage, onCameraSelect }) {
   const Component = MAP[activePage] || AddDevicesPage;
-  return <Component />;
+  return <Component onCameraSelect={onCameraSelect} />;
 }
