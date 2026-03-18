@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -10,7 +10,6 @@ import re
 import requests as http_requests
 from ome_service import register_stream
 from onvif_service import probe_camera, move_camera_ptz
-from device_discovery import discover_onvif_devices
 import rtsp_recorder as recorder
 import encrypt_service
 from recording_api import recording_router
@@ -41,7 +40,7 @@ cameras_col = _db["cameras"]
 
 
 # ------------------------------------------------------------------
-# devices.json helpers
+# devices.json helpers (unchanged)
 # ------------------------------------------------------------------
 def load_devices():
     try:
@@ -71,22 +70,11 @@ def stream_exists_in_ome(stream_name: str) -> bool:
         return False
 
 
-def delete_stream_from_ome(stream_name: str):
-    try:
-        http_requests.delete(
-            f"{OME_API}/v1/vhosts/default/apps/app/streams/{stream_name}",
-            headers={"Authorization": OME_AUTH},
-            timeout=3,
-        )
-    except Exception as e:
-        print(f"[OME DELETE] Failed for {stream_name}: {e}")
-
-
 devices = load_devices()
 
 
 # ------------------------------------------------------------------
-# OME stream watchdog — only watches devices in devices.json
+# OME stream watchdog
 # ------------------------------------------------------------------
 async def stream_watchdog():
     await asyncio.sleep(5)
@@ -145,6 +133,7 @@ class ProbeRequest(BaseModel):
     password: str = ""
 
 
+# NEW — accepts a raw RTSP URL directly (no ONVIF needed)
 class StreamRegisterRequest(BaseModel):
     rtsp_url: str
 
@@ -224,40 +213,16 @@ async def onvif_probe(req: ProbeRequest):
     return result
 
 
-@app.get("/api/onvif/discover")
-async def discover_cameras():
-    print("[DISCOVERY] Searching for ONVIF cameras...")
-
-    responses = await asyncio.to_thread(discover_onvif_devices)
-
-    import re
-    cameras = []
-
-    for res in responses:
-        match = re.search(r"http://([\d\.]+)", res)
-        if match:
-            ip = match.group(1)
-
-            cameras.append({
-                "ip": ip,
-                "xaddr": f"http://{ip}/onvif/device_service"
-            })
-
-    print(f"[DISCOVERY] Found {len(cameras)} camera(s)")
-
-    return {
-        "success": True,
-        "cameras": cameras
-    }
-
 # ------------------------------------------------------------------
-# Register a raw RTSP stream URL directly (no ONVIF probe)
+# NEW: Register a raw RTSP stream URL directly (no ONVIF probe)
 # ------------------------------------------------------------------
 @app.post("/api/streams/register")
 async def register_rtsp_stream(req: StreamRegisterRequest):
     rtsp = req.rtsp_url.strip()
     print(f"[RTSP] Registering stream: {rtsp}")
 
+    # Derive a unique stream name from the URL
+    # e.g. rtsp://192.168.1.64:554/stream1  →  192_168_1_64
     try:
         from urllib.parse import urlparse
         parsed      = urlparse(rtsp)
@@ -267,6 +232,7 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
     except Exception:
         stream_name = re.sub(r"[^a-zA-Z0-9]", "_", rtsp)[:32]
 
+    # Check if already registered
     existing = next((d for d in devices if d.get("ome_stream") == stream_name), None)
     if existing and stream_exists_in_ome(stream_name):
         print(f"[RTSP] Stream {stream_name} already live in OME, skipping.")
@@ -279,6 +245,7 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
             "rtsp_url":    rtsp,
         }
 
+    # Register in OME
     try:
         ome_response = register_stream(stream_name, rtsp)
         print(f"[RTSP] OME response: {ome_response}")
@@ -286,6 +253,7 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
         print(f"[RTSP] ❌ OME registration failed: {e}")
         return {"success": False, "error": str(e)}
 
+    # Save to devices.json
     if not existing:
         new_device = {"ome_stream": stream_name, "rtsp_url": rtsp, "ip": host}
         devices.append(new_device)
@@ -293,6 +261,7 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
         existing["rtsp_url"] = rtsp
     save_devices(devices)
 
+    # Save to MongoDB
     try:
         cameras_col.update_one(
             {"ome_stream": stream_name},
@@ -305,7 +274,7 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
                 "mac":          "—",
                 "added_at":     datetime.utcnow(),
                 "status":       "streaming",
-                "source":       "rtsp_url",
+                "source":       "rtsp_url",        # marks it as manually added
             }},
             upsert=True
         )
@@ -313,6 +282,7 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
     except Exception as e:
         print(f"[MONGO] ⚠ Save failed: {e}")
 
+    # Start recording
     recorder.start_camera(stream_name, rtsp)
     print(f"[RTSP] 🎥 Recording started for {stream_name}")
 
@@ -324,37 +294,6 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
         "status":      "streaming",
         "rtsp_url":    rtsp,
     }
-
-
-# ------------------------------------------------------------------
-# DELETE camera — stops streaming, recording, and removes from DB
-# ------------------------------------------------------------------
-@app.delete("/api/cameras/{stream_name}")
-async def delete_camera(stream_name: str):
-    global devices
-
-    # 1. Remove from in-memory list and save
-    before = len(devices)
-    devices = [d for d in devices if d.get("ome_stream") != stream_name]
-    save_devices(devices)
-    print(f"[DELETE] Removed {stream_name} from devices.json ({before} → {len(devices)})")
-
-    # 2. Stop OME stream
-    delete_stream_from_ome(stream_name)
-    print(f"[DELETE] Stopped OME stream: {stream_name}")
-
-    # 3. Stop recorder
-    try:
-        recorder.stop_camera(stream_name)
-        print(f"[DELETE] Stopped recording: {stream_name}")
-    except Exception as e:
-        print(f"[DELETE] Recorder stop error: {e}")
-
-    # 4. Remove from MongoDB
-    result = cameras_col.delete_one({"ome_stream": stream_name})
-    print(f"[DELETE] MongoDB removed {result.deleted_count} doc(s) for {stream_name}")
-
-    return {"success": True, "deleted": stream_name}
 
 
 @app.post("/api/devices/")
@@ -456,7 +395,6 @@ def update_storage_selection(payload: dict):
         }}
     )
     return {"success": True}
-
 
 class PTZMoveRequest(BaseModel):
     ip: str
