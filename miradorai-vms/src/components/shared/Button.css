@@ -12,8 +12,8 @@
 }
 .m-btn:hover:not(.m-btn--disabled) { background: var(--bg-hover); color: var(--text-primary); border-color: var(--text-muted); }
 
-.m-btn--primary { background: var(--teal); color: #000; border-color: var(--teal); font-weight: 600; }
-.m-btn--primary:hover:not(.m-btn--disabled) { background: var(--teal-dim); border-color: var(--teal-dim); }
+.m-btn--primary { background: var(--teal-dim); color: var(--teal); border-color: var(--teal); font-weight: 600; }
+.m-btn--primary:hover:not(.m-btn--disabled) { background: var(--teal); color: #fff; border-color: var(--teal); }
 
 .m-btn--danger { background: transparent; color: var(--red); border-color: var(--red); }
 .m-btn--danger:hover:not(.m-btn--disabled) { background: rgba(255,77,106,0.12); }

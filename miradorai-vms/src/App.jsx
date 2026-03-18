@@ -5,13 +5,15 @@ import TopBar from "./components/layout/TopBar";
 import PageRenderer from "./components/layout/PageRenderer";
 import SplashScreen from "./components/layout/SplashScreen";
 import AlarmsPanel from "./components/layout/AlarmsPanel";
+import CameraContextPanel from "./components/layout/CameraContextPanel";
 import "./styles/global.css";
 
 export default function App() {
-  const [activePage, setActivePage] = useState("add-devices");
+  const [activePage, setActivePage] = useState("live-view");
   const [showSplash, setShowSplash] = useState(true);
   const [appVisible, setAppVisible] = useState(false);
   const [alarmsOpen, setAlarmsOpen] = useState(false);
+  const [selectedCamera, setSelectedCamera] = useState(null);
 
   const handleSplashDone = () => {
     setShowSplash(false);
@@ -32,11 +34,21 @@ export default function App() {
             onNavigate={setActivePage}
             onAlarmsClick={() => setAlarmsOpen((p) => !p)}
             alarmsOpen={alarmsOpen}
+            onCameraSelect={setSelectedCamera}
+            selectedCamera={selectedCamera}
           />
           <main className="app-content">
-            <PageRenderer activePage={activePage} />
+            <PageRenderer activePage={activePage} onCameraSelect={setSelectedCamera} />
           </main>
           <AlarmsPanel open={alarmsOpen} onClose={() => setAlarmsOpen(false)} />
+          {selectedCamera && (
+            <CameraContextPanel
+              camera={selectedCamera}
+              onNavigate={setActivePage}
+              onClose={() => setSelectedCamera(null)}
+              activePage={activePage}
+            />
+          )}
         </div>
       </div>
     </>

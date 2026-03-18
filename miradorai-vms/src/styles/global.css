@@ -3,31 +3,31 @@
 
 /* ── Design Tokens ────────────────────────────── */
 :root {
-  --bg-base:       #0d0f14;
-  --bg-surface:    #13161e;
-  --bg-elevated:   #1a1e28;
-  --bg-hover:      #1f2433;
-  --bg-active:     #1e2d3d;
+  --bg-base:       #080a0e;
+  --bg-surface:    #0a0c10;
+  --bg-elevated:   #0d1018;
+  --bg-hover:      #0d1018;
+  --bg-active:     #0a2a1e;
 
-  --border:        #252a38;
-  --border-light:  #2e3548;
+  --border:        #131620;
+  --border-light:  #1a1e2a;
 
-  --teal:          #00c8a0;
-  --teal-dim:      #00a882;
-  --teal-glow:     rgba(0,200,160,0.15);
-  --teal-subtle:   rgba(0,200,160,0.08);
+  --teal:          #10b981;
+  --teal-dim:      #0a2a1e;
+  --teal-glow:     rgba(16,185,129,0.15);
+  --teal-subtle:   rgba(16,185,129,0.08);
 
-  --text-primary:  #e8eaf0;
-  --text-secondary:#8892a4;
-  --text-muted:    #505870;
-  --text-accent:   #00c8a0;
+  --text-primary:  #c4c6ce;
+  --text-secondary:#5a5e72;
+  --text-muted:    #2e3347;
+  --text-accent:   #10b981;
 
-  --red:           #ff4d6a;
-  --yellow:        #ffb340;
-  --blue:          #4d9fff;
+  --red:           #ef4444;
+  --yellow:        #f59e0b;
+  --blue:          #3b82f6;
 
-  --radius-sm:     4px;
-  --radius-md:     8px;
+  --radius-sm:     7px;
+  --radius-md:     10px;
   --radius-lg:     12px;
 
   --shadow-sm:     0 1px 4px rgba(0,0,0,0.4);
@@ -37,7 +37,7 @@
   --font-ui:       'DM Sans', 'Segoe UI', sans-serif;
   --font-mono:     'DM Mono', 'Courier New', monospace;
 
-  --transition:    0.18s ease;
+  --transition:    0.12s ease;
 }
 
 /* ── Reset ─────────────────────────────────────── */

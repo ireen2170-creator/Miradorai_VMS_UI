@@ -9,11 +9,14 @@ function SvgIcon({ html }) {
 
 export default function Sidebar({ activePage, onNavigate }) {
   const [expanded, setExpanded] = useState({
-    Devices: true, Storage: false, Recording: false, Client: false,
+    Cameras: true, 
+    "Recording & Events": false, 
+    Storage: false, 
+    Client: false,
   });
   const [search, setSearch] = useState("");
+  
   const toggle = (s) => setExpanded((p) => ({ ...p, [s]: !p[s] }));
-  const activeSection = NAV_CONFIG.find((s) => s.items.some((i) => i.page === activePage))?.section;
 
   return (
     <aside className="sidebar">
@@ -43,16 +46,39 @@ export default function Sidebar({ activePage, onNavigate }) {
 
       {/* Nav */}
       <nav className="sidebar__nav">
-        {NAV_CONFIG.map(({ section, icon, items }) => {
-          const visible = items.filter((i) =>
+        {NAV_CONFIG.map(({ section, page, icon, items }) => {
+          // If item has a page property, it's a direct navigate item (like Live View or About)
+          if (page) {
+            const isActive = activePage === page;
+            const matchesSearch = !search || section.toLowerCase().includes(search.toLowerCase());
+            if (!matchesSearch) return null;
+            
+            return (
+              <button
+                key={section}
+                className={`sidebar__direct-item ${isActive ? "sidebar__direct-item--active" : ""}`}
+                onClick={() => onNavigate(page)}
+              >
+                <SvgIcon html={icon} />
+                <span className="sidebar__direct-item-label">{section}</span>
+                {isActive && <span className="sidebar__item-dot" />}
+              </button>
+            );
+          }
+
+          // If item has items array, it's expandable
+          const visible = items?.filter((i) =>
             !search || i.label.toLowerCase().includes(search.toLowerCase())
-          );
+          ) || [];
+          
           if (search && visible.length === 0) return null;
-          const isActiveSection = activeSection === section;
+          
+          const hasActiveItem = items?.some((i) => i.page === activePage);
+
           return (
             <div key={section} className="sidebar__group">
               <button
-                className={`sidebar__group-btn ${isActiveSection ? "sidebar__group-btn--active" : ""}`}
+                className={`sidebar__group-btn ${hasActiveItem ? "sidebar__group-btn--active" : ""}`}
                 onClick={() => toggle(section)}
               >
                 <SvgIcon html={icon} />
