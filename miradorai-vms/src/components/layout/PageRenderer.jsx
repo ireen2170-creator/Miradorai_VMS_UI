@@ -1,3 +1,4 @@
+import { useAuth } from "../../context/AuthContext";
 import AddDevicesPage          from "../../pages/devices/AddDevicesPage";
 import CamerasPage             from "../../pages/devices/CamerasPage";
 import OtherDevicesPage        from "../../pages/devices/OtherDevicesPage";
@@ -23,6 +24,7 @@ import StreamingPage           from "../../pages/client/StreamingPage";
 import FirmwareUpgradePage     from "../../pages/connectedservices/Firmwareupgradepage";
 import SmartSearchSettingsPage from "../../pages/smartsearcxh/Smartsearchsettingspage";
 import LiveViewPage            from "../../pages/liveview/LiveViewPage";
+import MediaPlayerPage         from "../../pages/admin/MediaPlayerPage";
 
 const MAP = {
   "add-devices":          AddDevicesPage,
@@ -50,9 +52,21 @@ const MAP = {
   "firmware-upgrade":     FirmwareUpgradePage,
   "smartsearch-settings": SmartSearchSettingsPage,
   "live-view":            LiveViewPage,
+  "media-player":         MediaPlayerPage,
 };
 
+// These pages require admin role
+const ADMIN_ONLY_PAGES = ["media-player"];
+
 export default function PageRenderer({ activePage, onCameraSelect }) {
+  const { isAdmin } = useAuth();
+  
+  // Check if page requires admin access
+  if (ADMIN_ONLY_PAGES.includes(activePage) && !isAdmin) {
+    // Redirect to live-view if user doesn't have permission
+    return <LiveViewPage onCameraSelect={onCameraSelect} />;
+  }
+  
   const Component = MAP[activePage] || AddDevicesPage;
   return <Component onCameraSelect={onCameraSelect} />;
 }

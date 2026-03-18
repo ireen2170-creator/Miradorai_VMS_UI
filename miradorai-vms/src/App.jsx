@@ -1,14 +1,17 @@
 
 import { useState } from "react";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import Sidebar from "./components/layout/Sidebar";
 import TopBar from "./components/layout/TopBar";
 import PageRenderer from "./components/layout/PageRenderer";
 import SplashScreen from "./components/layout/SplashScreen";
 import AlarmsPanel from "./components/layout/AlarmsPanel";
 import CameraContextPanel from "./components/layout/CameraContextPanel";
+import LoginPage from "./pages/auth/LoginPage";
 import "./styles/global.css";
 
-export default function App() {
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth();
   const [activePage, setActivePage] = useState("live-view");
   const [showSplash, setShowSplash] = useState(true);
   const [appVisible, setAppVisible] = useState(false);
@@ -19,6 +22,16 @@ export default function App() {
     setShowSplash(false);
     setTimeout(() => setAppVisible(true), 50);
   };
+
+  // Show loading state while checking auth
+  if (isLoading) {
+    return <SplashScreen onDone={() => {}} />;
+  }
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   return (
     <>
@@ -52,5 +65,13 @@ export default function App() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

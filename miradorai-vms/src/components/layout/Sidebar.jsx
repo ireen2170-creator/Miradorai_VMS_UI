@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { NAV_CONFIG } from "../../data/navConfig";
+import { getNavConfig } from "../../data/navConfig";
+import { useAuth } from "../../context/AuthContext";
 import logoImg from "../../assets/logo.jpg";
 import "./Sidebar.css";
 
@@ -8,6 +9,9 @@ function SvgIcon({ html }) {
 }
 
 export default function Sidebar({ activePage, onNavigate }) {
+  const { user, logout } = useAuth();
+  const navConfig = getNavConfig(user?.role);
+  
   const [expanded, setExpanded] = useState({
     Cameras: true, 
     "Recording & Events": false, 
@@ -15,8 +19,22 @@ export default function Sidebar({ activePage, onNavigate }) {
     Client: false,
   });
   const [search, setSearch] = useState("");
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
   const toggle = (s) => setExpanded((p) => ({ ...p, [s]: !p[s] }));
+
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutConfirm(false);
+    logout();
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutConfirm(false);
+  };
 
   return (
     <aside className="sidebar">
@@ -46,7 +64,7 @@ export default function Sidebar({ activePage, onNavigate }) {
 
       {/* Nav */}
       <nav className="sidebar__nav">
-        {NAV_CONFIG.map(({ section, page, icon, items }) => {
+        {navConfig.map(({ section, page, icon, items }) => {
           // If item has a page property, it's a direct navigate item (like Live View or About)
           if (page) {
             const isActive = activePage === page;
@@ -112,12 +130,61 @@ export default function Sidebar({ activePage, onNavigate }) {
 
       {/* Footer */}
       <div className="sidebar__footer">
-        <div className="sidebar__server-dot" />
-        <div>
-          <div className="sidebar__server-name">MIRADOR-VMS</div>
-          <div className="sidebar__server-status">Connected · Secure</div>
+        <div className="sidebar__user-info">
+          <div className="sidebar__user-avatar">
+            {user?.email?.charAt(0).toUpperCase()}
+          </div>
+          <div className="sidebar__user-details">
+            <div className="sidebar__user-email">{user?.email}</div>
+            <div className="sidebar__user-role">
+              {user?.role === "admin" ? "Administrator" : "Client"}
+            </div>
+            {user?.loginDate && (
+              <div className="sidebar__user-login-date">
+                Logged in: {user.loginDate}
+              </div>
+            )}
+          </div>
         </div>
+        <button 
+          className="sidebar__logout-btn"
+          onClick={handleLogoutClick}
+          title="Logout"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 8l4-4m0 0l-4 4m4-4v12a2 2 0 0 1-2 2h-4"/>
+          </svg>
+          <span>Logout</span>
+        </button>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      {showLogoutConfirm && (
+        <div className="logout-modal-overlay">
+          <div className="logout-modal">
+            <div className="logout-modal__header">
+              <h2>Confirm Logout</h2>
+            </div>
+            <div className="logout-modal__body">
+              <p>Are you sure you want to logout?</p>
+            </div>
+            <div className="logout-modal__footer">
+              <button
+                className="logout-modal__btn logout-modal__btn--cancel"
+                onClick={cancelLogout}
+              >
+                Cancel
+              </button>
+              <button
+                className="logout-modal__btn logout-modal__btn--confirm"
+                onClick={confirmLogout}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

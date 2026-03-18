@@ -1,5 +1,5 @@
-// SIMPLIFIED CORE SIDEBAR NAVIGATION
-export const NAV_CONFIG = [
+// CORE NAVIGATION SHARED BY ALL ROLES
+const CORE_NAV = [
   {
     section: "Live View",
     page: "live-view",
@@ -43,6 +43,26 @@ export const NAV_CONFIG = [
     icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>`,
   },
 ];
+
+// ADMIN-ONLY NAVIGATION ITEMS
+const ADMIN_ONLY_NAV = [
+  {
+    section: "Media Player",
+    page: "media-player",
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>`,
+  },
+];
+
+// EXPORT ROLE-BASED NAVIGATION
+export const getNavConfig = (role = "client") => {
+  if (role === "admin") {
+    return [...CORE_NAV, ...ADMIN_ONLY_NAV];
+  }
+  return CORE_NAV;
+};
+
+// Default export for backward compatibility
+export const NAV_CONFIG = CORE_NAV;
 
 // CAMERA-SPECIFIC FEATURES - SHOWN WHEN CLICKING A CAMERA
 export const CAMERA_FEATURES_CONFIG = [
