@@ -28,25 +28,38 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      // Mock API call - replace with actual backend endpoint
-      const response = await fetch("/api/discover-devices", {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      }).catch(() => {
-        // If API fails, use mock data
-        return { ok: true, json: async () => ({ devices: getMockDevices() }) };
-      });
+      // Try to call backend API
+      let devices = [];
+      try {
+        const response = await fetch("http://localhost:8000/api/discover-devices", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
 
-      if (!response.ok) throw new Error("Discovery failed");
-      const data = await response.json();
-      
-      setDiscoveredDevices(data.devices || getMockDevices());
+        if (response.ok) {
+          const data = await response.json();
+          devices = data.devices || [];
+          console.log("[Discovery] Backend returned:", devices);
+        } else {
+          console.log("[Discovery] Backend returned non-OK status:", response.status);
+        }
+      } catch (fetchErr) {
+        console.log("[Discovery] Backend API failed, using mock data:", fetchErr.message);
+      }
+
+      // If no devices from backend, use mock data
+      if (devices.length === 0) {
+        devices = getMockDevices();
+      }
+
+      setDiscoveredDevices(devices);
       setStatusMessage(
-        `Found ${data.devices?.length || 0} camera${data.devices?.length !== 1 ? "s" : ""}`
+        `Found ${devices.length} camera${devices.length !== 1 ? "s" : ""}`
       );
       setProgress(100);
       setHasScanned(true);
     } catch (err) {
+      console.error("[Discovery] Error:", err);
       setError(err.message || "Failed to discover devices");
       setStatusMessage("Scan failed");
       setHasScanned(true);

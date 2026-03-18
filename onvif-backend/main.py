@@ -13,6 +13,7 @@ from onvif_service import probe_camera, move_camera_ptz
 import rtsp_recorder as recorder
 import encrypt_service
 from recording_api import recording_router
+from discovery_service import discover_onvif_devices, discover_onvif_devices_simple
 import shutil
 
 app = FastAPI(title="MIRADOR ONVIF Backend")
@@ -211,6 +212,51 @@ async def onvif_probe(req: ProbeRequest):
         print(f"[ONVIF] ❌ {result['error']}")
 
     return result
+
+
+# ------------------------------------------------------------------
+# NEW: Discover ONVIF devices on network using WS-Discovery
+# ------------------------------------------------------------------
+@app.get("/api/discover-devices")
+async def discover_devices():
+    """
+    Auto-discover ONVIF cameras on the network.
+    Uses WS-Discovery protocol with fallback to subnet scanning.
+    """
+    try:
+        print("[DISCOVERY] Starting ONVIF device discovery...")
+        
+        # Try WS-Discovery first (faster, more reliable)
+        devices = await asyncio.to_thread(discover_onvif_devices, 10)
+        print(f"[DISCOVERY] WS-Discovery found {len(devices)} device(s)")
+        
+        # If WS-Discovery fails, fall back to subnet scanning
+        if not devices:
+            print("[DISCOVERY] WS-Discovery found no devices, trying subnet scan...")
+            devices = await asyncio.to_thread(discover_onvif_devices_simple, 5, "192.168.1")
+            print(f"[DISCOVERY] Subnet scan found {len(devices)} device(s)")
+        
+        print(f"[DISCOVERY] Returning {len(devices)} device(s) to frontend")
+        
+        return {
+            "devices": devices,
+            "count": len(devices),
+            "timestamp": datetime.utcnow().isoformat(),
+            "success": True
+        }
+    except Exception as e:
+        print(f"[DISCOVERY] Fatal error: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Return empty list instead of error
+        return {
+            "devices": [],
+            "count": 0,
+            "timestamp": datetime.utcnow().isoformat(),
+            "success": False,
+            "error": str(e)
+        }
 
 
 # ------------------------------------------------------------------
