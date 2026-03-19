@@ -46,8 +46,40 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
 
         if (response.ok) {
           const data = await response.json();
-          devices = data.devices || [];
-          console.log("[Discovery] Backend returned:", devices);
+          const incoming = data.devices || [];
+
+          // Normalize IP and dedupe by exact IP (office cam vs others)
+          const normalized = incoming.map((dev) => {
+            let ip = dev.ip || "";
+            if (!ip && dev.stream_uri) {
+              try {
+                ip = new URL(dev.stream_uri).hostname;
+              } catch {}
+            }
+            if (!ip && dev.rtsp_url) {
+              try {
+                ip = new URL(dev.rtsp_url).hostname;
+              } catch {}
+            }
+            return {
+              ...dev,
+              ip,
+              name: dev.name || `${ip || "Unknown"} · ${dev.manufacturer || "Unknown"}`,
+            };
+          });
+
+          const uniqueByIp = Object.values(
+            normalized.reduce((acc, item) => {
+              if (!item.ip) return acc;
+              acc[item.ip] = acc[item.ip]
+                ? { ...acc[item.ip], ...item }
+                : item;
+              return acc;
+            }, {})
+          );
+
+          devices = uniqueByIp;
+          console.log("[Discovery] Backend normalized devices:", devices);
         } else {
           console.log("[Discovery] Backend returned non-OK status:", response.status);
         }
