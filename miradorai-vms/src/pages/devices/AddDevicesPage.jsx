@@ -250,20 +250,36 @@ export default function AddDevicesPage() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ rtsp_url: d.rtsp_url }),
             });
-            
+
             if (registerRes.ok) {
               const registerData = await registerRes.json();
               device.ws_url = registerData.ws_url || null;
               device.stream_key = registerData.stream_key || null;
-              device.stream_status = registerData.status || "pending";
+              device.stream_status = registerData.status || (registerData.ws_url ? "streaming" : "pending");
+              device.status = registerData.ws_url ? "Online" : "Offline";
               console.log(`[AddDevices] Registered ${d.ip} with OME`);
+            } else {
+              device.stream_status = "not_registered";
+              device.status = "Offline";
+              console.log(`[AddDevices] Registration failed for ${d.ip}: ${registerRes.status}`);
             }
           } catch (err) {
+            device.stream_status = "not_registered";
+            device.status = "Offline";
             console.log(`[AddDevices] Could not register ${d.ip}:`, err.message);
           }
         }
 
-        setDevices((prev) => [...prev, device]);
+        setDevices((prev) => {
+          // avoid duplicate entries by IP
+          const existingIndex = prev.findIndex((item) => item.ip === device.ip);
+          if (existingIndex !== -1) {
+            const next = [...prev];
+            next[existingIndex] = { ...next[existingIndex], ...device };
+            return next;
+          }
+          return [...prev, device];
+        });
       }
       
       setTimeout(() => {
