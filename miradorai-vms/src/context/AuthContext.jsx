@@ -196,6 +196,57 @@ export const AuthProvider = ({ children }) => {
     return { success: true, message: "Password reset successfully! Please sign in." };
   };
 
+  const oauthLogin = (provider, selectedRole = "client", selectedEmail = null) => {
+    if (provider !== "google") {
+      return { success: false, error: "Unsupported OAuth provider" };
+    }
+
+    const candidateEmail = selectedEmail || "google.user@example.com";
+    if (!candidateEmail || !validateEmail(candidateEmail)) {
+      return { success: false, error: "Please select a valid Google account email" };
+    }
+
+    const existingAccount = accounts.find((acc) => acc.email === candidateEmail);
+    const roleToUse = existingAccount ? existingAccount.role : selectedRole;
+
+    let account = existingAccount;
+    if (!account) {
+      account = {
+        id: Date.now().toString(),
+        email: candidateEmail,
+        password: "",
+        role: roleToUse,
+        oauthProvider: "google",
+        createdAt: new Date().toISOString(),
+      };
+
+      const updatedAccounts = [...accounts, account];
+      setAccounts(updatedAccounts);
+      localStorage.setItem("miradorai_accounts", JSON.stringify(updatedAccounts));
+    }
+
+    const userData = {
+      id: account.id,
+      email: account.email,
+      role: roleToUse,
+      loginTime: new Date().toISOString(),
+      loginDate: new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      sessionId: Math.random().toString(36).substring(2, 11),
+      oauthProvider: "google",
+    };
+
+    setUser(userData);
+    localStorage.setItem("miradorai_user", JSON.stringify(userData));
+
+    return { success: true, message: `Logged in as ${account.email} with role ${account.role}.` };
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem("miradorai_user");
@@ -218,6 +269,7 @@ export const AuthProvider = ({ children }) => {
         signup,
         forgotPassword,
         resetPassword,
+        oauthLogin,
         logout,
       }}
     >

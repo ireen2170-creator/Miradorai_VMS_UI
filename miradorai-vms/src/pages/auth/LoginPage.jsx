@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import "./LoginPage.css";
 
 const LoginPage = () => {
-  const { login, signup, forgotPassword, resetPassword } = useAuth();
+  const { login, signup, forgotPassword, resetPassword, oauthLogin, accounts } = useAuth();
   const [activeForm, setActiveForm] = useState("signin"); // "signin" | "signup" | "forgot"
   const [role, setRole] = useState("client");
   const [showPassword, setShowPassword] = useState(false);
@@ -13,6 +13,11 @@ const LoginPage = () => {
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
   const [signInError, setSignInError] = useState("");
+
+  const [oauthMessage, setOauthMessage] = useState("");
+  const [oauthError, setOauthError] = useState("");
+  const [showGoogleChooser, setShowGoogleChooser] = useState(false);
+  const [googleAccount, setGoogleAccount] = useState("");
 
   // Sign Up Form
   const [signUpEmail, setSignUpEmail] = useState("");
@@ -45,6 +50,52 @@ const LoginPage = () => {
     }
 
     setIsLoading(false);
+  };
+
+  const handleGoogleLogin = () => {
+    setOauthError("");
+    setOauthMessage("");
+
+    const firstChoice = accounts && accounts.length ? accounts[0].email : "";
+    setGoogleAccount(firstChoice);
+    setShowGoogleChooser(true);
+  };
+
+  const performGoogleLogin = async () => {
+    setOauthError("");
+    setOauthMessage("");
+
+    if (!googleAccount) {
+      setOauthError("Please select a Google account first.");
+      return;
+    }
+
+    setIsLoading(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const result = oauthLogin("google", role, googleAccount);
+
+    if (!result.success) {
+      setOauthError(result.error);
+      setIsLoading(false);
+      return;
+    }
+
+    const selectedExisting = accounts.find((acc) => acc.email === googleAccount);
+    if (selectedExisting && selectedExisting.role && selectedExisting.role !== role) {
+      setRole(selectedExisting.role);
+    }
+
+    setOauthMessage(result.message || "Logged in with Google successfully");
+    setIsLoading(false);
+    setShowGoogleChooser(false);
+  };
+
+  const cancelGoogleLogin = () => {
+    setShowGoogleChooser(false);
+    setOauthError("");
+    setOauthMessage("");
   };
 
   const handleSignUp = async (e) => {
@@ -216,12 +267,64 @@ const LoginPage = () => {
             </button>
 
             {/* Google Login */}
-            <button type="button" className="btn-google" disabled={isLoading}>
+            <button
+              type="button"
+              className="btn-google"
+              disabled={isLoading}
+              onClick={handleGoogleLogin}
+            >
               <svg viewBox="0 0 24 24" width="18" height="18">
                 <text x="0" y="16" fontSize="16">G</text>
               </svg>
-              Login with Google
+              Continue with Google
             </button>
+
+            {showGoogleChooser && (
+              <div className="google-chooser">
+                <p>Select a Google account:</p>
+                <select
+                  value={googleAccount}
+                  onChange={(e) => setGoogleAccount(e.target.value)}
+                  disabled={isLoading}
+                >
+                  <option value="">-- Choose account --</option>
+                  {accounts && accounts.length > 0 ? (
+                    accounts.map((acct) => (
+                      <option key={acct.email} value={acct.email}>
+                        {acct.email} ({acct.role})
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="google.user@example.com">google.user@example.com</option>
+                      <option value="admin.google@example.com">admin.google@example.com</option>
+                      <option value="client.google@example.com">client.google@example.com</option>
+                    </>
+                  )}
+                </select>
+                <div className="google-chooser-actions">
+                  <button
+                    type="button"
+                    className="btn-primary"
+                    onClick={performGoogleLogin}
+                    disabled={isLoading || !googleAccount}
+                  >
+                    Sign in with Google
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={cancelGoogleLogin}
+                    disabled={isLoading}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {oauthError && <div className="error-message">{oauthError}</div>}
+            {oauthMessage && <div className="success-message">{oauthMessage}</div>}
 
             {/* Sign Up Link */}
             <div className="form-footer">

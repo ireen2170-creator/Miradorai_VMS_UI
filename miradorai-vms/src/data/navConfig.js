@@ -35,6 +35,7 @@ const CORE_NAV = [
     items: [
       { label: "Client Settings", page: "client-settings", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 003 12c0 5.52 4.48 10 10 10s10-4.48 10-10c0-2.76-1.12-5.26-2.93-7.07"/></svg>` },
       { label: "User Settings", page: "user-settings", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z"/></svg>` },
+      { label: "Profile", page: "profile", icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 12a4 4 0 100-8 4 4 0 000 8z"/><path d="M4 21v-2a5 5 0 015-5h6a5 5 0 015 5v2"/></svg>` },
     ],
   },
   {
