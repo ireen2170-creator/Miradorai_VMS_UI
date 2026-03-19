@@ -12,6 +12,20 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  useEffect(() => {
+    if (isOpen) {
+      startDiscovery();
+    } else {
+      setDiscoveredDevices([]);
+      setSelectedDevices(new Set());
+      setIsScanning(false);
+      setProgress(0);
+      setStatusMessage("Initializing network scan...");
+      setHasScanned(false);
+      setError(null);
+    }
+  }, [isOpen]);
+
   // Simulate network discovery
   const startDiscovery = async () => {
     setIsScanning(true);
@@ -89,7 +103,7 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
 
       setDiscoveredDevices(devices);
       setStatusMessage(
-        `Found ${data.devices?.length || 0} camera${data.devices?.length !== 1 ? "s" : ""}`
+        `Found ${devices.length} camera${devices.length !== 1 ? "s" : ""}`
       );
       setProgress(100);
       setHasScanned(true);
