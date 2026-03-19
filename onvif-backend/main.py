@@ -218,11 +218,13 @@ async def onvif_probe(req: ProbeRequest):
 # ------------------------------------------------------------------
 # NEW: Discover ONVIF devices on network using WS-Discovery
 # ------------------------------------------------------------------
+# NEW: Discover ONVIF devices on network using WS-Discovery
+# ------------------------------------------------------------------
 @app.get("/api/discover-devices")
 async def discover_devices(username: str = "", password: str = "", subnet: str = ""):
     """
     Auto-discover ONVIF cameras on the network.
-    Automatically detects local subnet and finds real cameras.
+    Returns both newly discovered devices AND already-known devices from devices.json.
     Uses optional credentials to probe cameras for detailed info.
     
     Query params:
@@ -233,12 +235,14 @@ async def discover_devices(username: str = "", password: str = "", subnet: str =
     try:
         print(f"[DISCOVERY] Starting device discovery (creds: {bool(username)}, subnet: {subnet or 'auto'})")
         
+        discovered_devices = []
+        
         # Try WS-Discovery first (faster, more reliable)
-        devices = await asyncio.to_thread(discover_onvif_devices, 10)
-        print(f"[DISCOVERY] WS-Discovery found {len(devices)} device(s)")
+        discovered_devices = await asyncio.to_thread(discover_onvif_devices, 10)
+        print(f"[DISCOVERY] WS-Discovery found {len(discovered_devices)} device(s)")
         
         # If WS-Discovery fails, fall back to subnet scanning
-        if not devices:
+        if not discovered_devices:
             print("[DISCOVERY] WS-Discovery found no devices, trying subnet scan...")
             # Pass custom subnet if provided
             if subnet:
@@ -248,22 +252,54 @@ async def discover_devices(username: str = "", password: str = "", subnet: str =
                 old_subnet = os.environ.get("HOST_SUBNET", "")
                 os.environ["HOST_SUBNET"] = subnet
                 try:
-                    devices = await asyncio.to_thread(discovery_func, 5, username, password)
+                    discovered_devices = await asyncio.to_thread(discovery_func, 5, username, password)
                 finally:
                     if old_subnet:
                         os.environ["HOST_SUBNET"] = old_subnet
                     elif "HOST_SUBNET" in os.environ:
                         del os.environ["HOST_SUBNET"]
             else:
-                devices = await asyncio.to_thread(discover_onvif_devices_simple, 5, username, password)
+                discovered_devices = await asyncio.to_thread(discover_onvif_devices_simple, 5, username, password)
             
-            print(f"[DISCOVERY] Subnet scan found {len(devices)} device(s)")
+            print(f"[DISCOVERY] Subnet scan found {len(discovered_devices)} device(s)")
         
-        print(f"[DISCOVERY] Returning {len(devices)} device(s) to frontend")
+        # Also load devices from devices.json (already-known/configured devices)
+        known_devices = load_devices()
+        print(f"[DISCOVERY] Loaded {len(known_devices)} device(s) from devices.json")
+        
+        # Convert known devices to discovery format
+        known_devices_formatted = []
+        for dev in known_devices:
+            if isinstance(dev, dict) and 'ip' in dev:
+                known_devices_formatted.append({
+                    'id': f"device-{dev.get('ip', 'unknown')}",
+                    'ip': dev.get('ip', 'unknown'),
+                    'mac': dev.get('mac', 'Unknown'),
+                    'status': 'online',
+                    'manufacturer': dev.get('manufacturer', 'Known Device'),
+                    'model': dev.get('model', 'Configured'),
+                    'rtsp_url': dev.get('rtsp_url', ''),
+                    'stream_uri': dev.get('stream_uri', dev.get('rtsp_url', '')),
+                    'source': 'known'  # Mark as already configured
+                })
+        
+        # Merge discovered + known devices (avoid duplicates by IP)
+        all_devices = discovered_devices + known_devices_formatted
+        
+        # Deduplicate by IP address, keeping discovered over known
+        seen_ips = set()
+        unique_devices = []
+        for dev in all_devices:
+            ip = dev.get('ip', '')
+            if ip and ip not in seen_ips:
+                seen_ips.add(ip)
+                unique_devices.append(dev)
+        
+        print(f"[DISCOVERY] Merged to {len(unique_devices)} total device(s)")
         
         return {
-            "devices": devices,
-            "count": len(devices),
+            "devices": unique_devices,
+            "count": len(unique_devices),
             "timestamp": datetime.utcnow().isoformat(),
             "success": True
         }
