@@ -300,9 +300,6 @@ async def discover_devices(username: str = "", password: str = "", subnet: str =
                     'stream_uri': dev.get('stream_uri', dev.get('rtsp_url', '')),
                     'source': 'known'  # Mark as already configured
                 })
-                    'rtsp_url': dev.get('rtsp_url', ''),
-                    'stream_uri': dev.get('stream_uri', dev.get('rtsp_url', '')),
-                    'source': 'known'  # Mark as already configured
                 })
         
         # Merge discovered + known devices (avoid duplicates by IP)
