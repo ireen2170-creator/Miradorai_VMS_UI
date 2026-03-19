@@ -271,13 +271,35 @@ async def discover_devices(username: str = "", password: str = "", subnet: str =
         known_devices_formatted = []
         for dev in known_devices:
             if isinstance(dev, dict) and 'ip' in dev:
+                ip = dev.get('ip', 'unknown')
+                
+                # Extract meaningful name from ome_stream or IP
+                ome_stream = dev.get('ome_stream', '')
+                if 'axis' in ome_stream.lower():
+                    manufacturer = 'Axis'
+                    model = 'Network Camera'
+                    device_name = f"Axis Camera {ip.split('.')[-1]}"
+                elif '235' in ip or '239' in ip:
+                    manufacturer = 'Hikvision/Dahua'
+                    model = ip
+                    device_name = f"Network Camera {ip.split('.')[-1]}"
+                else:
+                    manufacturer = 'Network Device'
+                    model = ip.split('.')[-1]
+                    device_name = f"Camera {ip.split('.')[-1]}"
+                
                 known_devices_formatted.append({
-                    'id': f"device-{dev.get('ip', 'unknown')}",
-                    'ip': dev.get('ip', 'unknown'),
+                    'id': f"device-{ip}",
+                    'ip': ip,
                     'mac': dev.get('mac', 'Unknown'),
+                    'name': device_name,
                     'status': 'online',
-                    'manufacturer': dev.get('manufacturer', 'Known Device'),
-                    'model': dev.get('model', 'Configured'),
+                    'manufacturer': manufacturer,
+                    'model': model,
+                    'rtsp_url': dev.get('rtsp_url', ''),
+                    'stream_uri': dev.get('stream_uri', dev.get('rtsp_url', '')),
+                    'source': 'known'  # Mark as already configured
+                })
                     'rtsp_url': dev.get('rtsp_url', ''),
                     'stream_uri': dev.get('stream_uri', dev.get('rtsp_url', '')),
                     'source': 'known'  # Mark as already configured
