@@ -11,6 +11,7 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
   const [hasScanned, setHasScanned] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [subnet, setSubnet] = useState("192.168.126");
 
   // Simulate network discovery
   const startDiscovery = async () => {
@@ -23,19 +24,20 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
 
     try {
       // Simulate scanning progress
-      setStatusMessage("Scanning network for ONVIF devices...");
+      setStatusMessage(`Scanning network ${subnet}.0/24 for ONVIF devices...`);
       
       for (let i = 0; i <= 100; i += 10) {
         setProgress(i);
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      // Try to call backend API with credentials
+      // Try to call backend API with credentials and subnet
       let devices = [];
       try {
         const params = new URLSearchParams();
         if (username) params.append('username', username);
         if (password) params.append('password', password);
+        if (subnet) params.append('subnet', subnet);
         
         const url = `http://localhost:8000/api/discover-devices${params.toString() ? '?' + params.toString() : ''}`;
         
@@ -48,17 +50,22 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
           const data = await response.json();
           devices = data.devices || [];
           console.log("[Discovery] Backend returned:", devices);
+          
+          setDiscoveredDevices(devices);
+          setStatusMessage(
+            `Found ${devices.length} camera${devices.length !== 1 ? "s" : ""}`
+          );
         } else {
           console.log("[Discovery] Backend returned non-OK status:", response.status);
+          setError("Backend discovery failed");
+          setStatusMessage("Discovery failed");
         }
       } catch (fetchErr) {
         console.log("[Discovery] Backend API failed:", fetchErr.message);
+        setError(fetchErr.message);
+        setStatusMessage("Discovery failed");
       }
 
-      setDiscoveredDevices(devices);
-      setStatusMessage(
-        `Found ${data.devices?.length || 0} camera${data.devices?.length !== 1 ? "s" : ""}`
-      );
       setProgress(100);
       setHasScanned(true);
     } catch (err) {
@@ -173,6 +180,16 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
               </div>
               
               <div className="discovery-credentials">
+                <label className="discovery-cred-label">
+                  <span>Network Subnet (e.g., 192.168.126)</span>
+                  <input
+                    type="text"
+                    value={subnet}
+                    onChange={(e) => setSubnet(e.target.value)}
+                    placeholder="192.168.1"
+                    className="discovery-cred-input"
+                  />
+                </label>
                 <label className="discovery-cred-label">
                   <span>Username (optional)</span>
                   <input
