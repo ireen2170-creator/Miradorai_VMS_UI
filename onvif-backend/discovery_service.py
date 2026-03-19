@@ -7,30 +7,62 @@ import socket
 import re
 import subprocess
 import ipaddress
+import os
 from datetime import datetime
 
 
 def get_local_subnet() -> str:
     """
     Auto-detect the local network subnet by checking active network interfaces.
+    For Docker containers, uses HOST_SUBNET environment variable or scans common subnets.
     Returns the subnet (e.g., "192.168.1")
     """
+    # Check environment variable first (Docker can override)
+    env_subnet = os.environ.get("HOST_SUBNET", "").strip()
+    if env_subnet:
+        print(f"[DISCOVERY] Using HOST_SUBNET env var: {env_subnet}")
+        return env_subnet
+    
+    # Try Windows ipconfig (since this is Windows host)
     try:
-        # Try to get active network interfaces
-        if socket.has_ipv6:
-            hostname = socket.gethostname()
-            local_ip = socket.gethostbyname(hostname)
-        else:
-            local_ip = socket.gethostbyname(socket.gethostname())
-        
-        # Get first 3 octets (subnet)
-        parts = local_ip.split('.')
-        subnet = '.'.join(parts[:3])
-        print(f"[DISCOVERY] Detected local subnet: {subnet}.x (local IP: {local_ip})")
-        return subnet
+        import platform
+        if platform.system() == "Windows":
+            result = subprocess.run(
+                ["ipconfig"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            # Parse for IPv4 addresses (not 127.x, not 172.17-172.18)
+            for line in result.stdout.split('\n'):
+                if "IPv4 Address" in line:
+                    ip = re.search(r'(\d+\.\d+\.\d+\.\d+)', line)
+                    if ip:
+                        local_ip = ip.group(1)
+                        # Skip Docker networks and loopback
+                        if not local_ip.startswith(('127.', '172.17.', '172.18.', '169.254.')):
+                            parts = local_ip.split('.')
+                            subnet = '.'.join(parts[:3])
+                            print(f"[DISCOVERY] Detected subnet from ipconfig: {subnet}.x (IP: {local_ip})")
+                            return subnet
     except Exception as e:
-        print(f"[DISCOVERY] Could not detect subnet: {e}, defaulting to 192.168.1")
-        return "192.168.1"
+        print(f"[DISCOVERY] Could not detect subnet from ipconfig: {e}")
+    
+    # Fallback: try socket (may get Docker IP, but still try)
+    try:
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        if not local_ip.startswith(('127.', '172.17.', '172.18.')):
+            parts = local_ip.split('.')
+            subnet = '.'.join(parts[:3])
+            print(f"[DISCOVERY] Detected subnet from socket: {subnet}.x (IP: {local_ip})")
+            return subnet
+    except Exception as e:
+        print(f"[DISCOVERY] Could not detect subnet from socket: {e}")
+    
+    # Ultimate fallback: scan common home/office subnets
+    print(f"[DISCOVERY] Could not auto-detect subnet, will try common subnets")
+    return "192.168.1"  # Default fallback
 
 
 def probe_onvif_device(ip: str, port: int = 80, username: str = "", password: str = "") -> dict | None:

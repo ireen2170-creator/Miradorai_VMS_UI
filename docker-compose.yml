@@ -34,9 +34,11 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - OME_URL=http://miradorai-ome:8081
+      - OME_URL=http://ome:8081
+      - OME_HOST=mirador-ome
+      - OME_PORT=3333
       - OME_HOST_IP=192.168.126.100
-      - OME_WS_PORT=3333
+      - HOST_SUBNET=192.168.126
       - MONGO_URI=mongodb://mongo:27017/
       - RECORDINGS_DIR=/recordings
       - VIDEO_KEY_FILE=/app/data/video.key

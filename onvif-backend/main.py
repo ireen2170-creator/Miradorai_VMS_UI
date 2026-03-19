@@ -219,7 +219,7 @@ async def onvif_probe(req: ProbeRequest):
 # NEW: Discover ONVIF devices on network using WS-Discovery
 # ------------------------------------------------------------------
 @app.get("/api/discover-devices")
-async def discover_devices(username: str = "", password: str = ""):
+async def discover_devices(username: str = "", password: str = "", subnet: str = ""):
     """
     Auto-discover ONVIF cameras on the network.
     Automatically detects local subnet and finds real cameras.
@@ -228,18 +228,35 @@ async def discover_devices(username: str = "", password: str = ""):
     Query params:
       username: ONVIF camera username (optional)
       password: ONVIF camera password (optional)
+      subnet: Manual subnet override (e.g., "192.168.126") - optional
     """
     try:
-        print(f"[DISCOVERY] Starting ONVIF device discovery (creds: {bool(username)})")
+        print(f"[DISCOVERY] Starting device discovery (creds: {bool(username)}, subnet: {subnet or 'auto'})")
         
         # Try WS-Discovery first (faster, more reliable)
         devices = await asyncio.to_thread(discover_onvif_devices, 10)
         print(f"[DISCOVERY] WS-Discovery found {len(devices)} device(s)")
         
-        # If WS-Discovery fails, fall back to subnet scanning with auto-detection
+        # If WS-Discovery fails, fall back to subnet scanning
         if not devices:
             print("[DISCOVERY] WS-Discovery found no devices, trying subnet scan...")
-            devices = await asyncio.to_thread(discover_onvif_devices_simple, 5, username, password)
+            # Pass custom subnet if provided
+            if subnet:
+                from discovery_service import discover_onvif_devices_simple as discovery_func
+                import os
+                # Temporarily set environment variable
+                old_subnet = os.environ.get("HOST_SUBNET", "")
+                os.environ["HOST_SUBNET"] = subnet
+                try:
+                    devices = await asyncio.to_thread(discovery_func, 5, username, password)
+                finally:
+                    if old_subnet:
+                        os.environ["HOST_SUBNET"] = old_subnet
+                    elif "HOST_SUBNET" in os.environ:
+                        del os.environ["HOST_SUBNET"]
+            else:
+                devices = await asyncio.to_thread(discover_onvif_devices_simple, 5, username, password)
+            
             print(f"[DISCOVERY] Subnet scan found {len(devices)} device(s)")
         
         print(f"[DISCOVERY] Returning {len(devices)} device(s) to frontend")
