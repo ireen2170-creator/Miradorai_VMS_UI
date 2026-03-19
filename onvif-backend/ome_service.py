@@ -1,14 +1,24 @@
 import requests
 import base64
+import os
 
 OME_URL = "http://ome:8081/v1/vhosts/default/apps/app/streams"
+OME_HOST = os.environ.get("OME_HOST", "mirador-ome")
+OME_PORT = os.environ.get("OME_PORT", "3333")
+WS_BASE = f"ws://{OME_HOST}:{OME_PORT}/app"
 
-token = base64.b64encode("bXl2bXNhY2Nlc3N0b2tlbg==".encode()).decode()
+# Token is ALREADY base64 encoded - do NOT encode again
+# "myVmsAccessToken" -> "bXl2bXNhY2Nlc3N0b2tlbg=="
+token = "bXl2bXNhY2Nlc3N0b2tlbg=="
 
 headers = {
     "Authorization": f"Basic {token}",
     "Content-Type": "application/json"
 }
+
+def get_ws_url(stream_name: str) -> str:
+    """Generate WebSocket URL for a registered stream."""
+    return f"{WS_BASE}/{stream_name}"
 
 def register_stream(stream_name, rtsp_url):
     payload = {

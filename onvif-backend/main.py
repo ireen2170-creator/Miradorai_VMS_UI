@@ -202,9 +202,10 @@ async def onvif_probe(req: ProbeRequest):
             print(f"[ONVIF] Stream {stream_name} already live in OME, skipping.")
             ome_response = {"message": "Already registered", "statusCode": 200}
 
+        from ome_service import get_ws_url
         result["ome_stream"]   = stream_name
         result["ome_response"] = ome_response
-        result["ws_url"]       = f"ws://192.168.126.100:3333/app/{stream_name}"
+        result["ws_url"]       = get_ws_url(stream_name)
         result["stream_key"]   = stream_name
         result["status"]       = "streaming"
         result["rtsp_url"]     = rtsp
@@ -287,10 +288,11 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
     existing = next((d for d in devices if d.get("ome_stream") == stream_name), None)
     if existing and stream_exists_in_ome(stream_name):
         print(f"[RTSP] Stream {stream_name} already live in OME, skipping.")
+        from ome_service import get_ws_url
         return {
             "success":     True,
             "ome_stream":  stream_name,
-            "ws_url":      f"ws://192.168.126.100:3333/app/{stream_name}",
+            "ws_url":      get_ws_url(stream_name),
             "stream_key":  stream_name,
             "status":      "streaming",
             "rtsp_url":    rtsp,
@@ -300,8 +302,14 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
     try:
         ome_response = register_stream(stream_name, rtsp)
         print(f"[RTSP] OME response: {ome_response}")
+        
+        # Accept 409 (stream already exists) as success
+        status = ome_response.get("statusCode", 0) if isinstance(ome_response, dict) else 0
+        if status not in [200, 201, 409]:
+            print(f"[RTSP] ❌ OME returned error: {ome_response}")
+            return {"success": False, "error": ome_response.get("message", "OME registration failed")}
     except Exception as e:
-        print(f"[RTSP] ❌ OME registration failed: {e}")
+        print(f"[RTSP] ❌ OME registration exception: {e}")
         return {"success": False, "error": str(e)}
 
     # Save to devices.json
@@ -337,10 +345,11 @@ async def register_rtsp_stream(req: StreamRegisterRequest):
     recorder.start_camera(stream_name, rtsp)
     print(f"[RTSP] 🎥 Recording started for {stream_name}")
 
+    from ome_service import get_ws_url
     return {
         "success":     True,
         "ome_stream":  stream_name,
-        "ws_url":      f"ws://192.168.126.100:3333/app/{stream_name}",
+        "ws_url":      get_ws_url(stream_name),
         "stream_key":  stream_name,
         "status":      "streaming",
         "rtsp_url":    rtsp,
