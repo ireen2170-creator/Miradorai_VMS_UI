@@ -14,6 +14,7 @@ import RecordingPage           from "../../pages/recording/RecordingPage";
 import EventsPage              from "../../pages/recording/EventsPage";
 import TriggersPage            from "../../pages/recording/TriggersPage";
 import ClientSettingsPage      from "../../pages/client/ClientSettingsPage";
+import ProfilePage             from "../../pages/client/ProfilePage";
 import AboutPage               from "../../pages/client/AboutPage";
 import Schedules               from "../../pages/recording/Schedules";
 import RecordingMethodPage     from "../../pages/recording/Recordingmethodpage";
@@ -52,6 +53,7 @@ const MAP = {
   "firmware-upgrade":     FirmwareUpgradePage,
   "smartsearch-settings": SmartSearchSettingsPage,
   "live-view":            LiveViewPage,
+  "profile":              ProfilePage,
   "media-player":         MediaPlayerPage,
 };
 

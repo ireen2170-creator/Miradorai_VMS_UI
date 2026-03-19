@@ -212,10 +212,36 @@
   text-transform: uppercase;
   letter-spacing: 0.3px;
 }
-.sidebar__user-login-date {
-  font-size: 9px;
-  color: #6b7280;
+.sidebar__user-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
   margin-top: 4px;
+}
+
+.sidebar__user-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.sidebar__user-badge.admin {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+.sidebar__user-badge.client {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+}
+
+.sidebar__user-login-date {
+  font-size: 10px;
+  color: #9ca3af;
   font-weight: 400;
   letter-spacing: 0.2px;
   line-height: 1.3;

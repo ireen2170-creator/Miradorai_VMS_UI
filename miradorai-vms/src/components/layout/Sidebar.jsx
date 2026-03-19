@@ -37,7 +37,7 @@ export default function Sidebar({ activePage, onNavigate }) {
   };
 
   return (
-    <aside className="sidebar">
+    <aside className="sidebar" aria-label="Main navigation">
       {/* Logo */}
       <div className="sidebar__logo">
         <div className="sidebar__logo-mark">
@@ -50,20 +50,21 @@ export default function Sidebar({ activePage, onNavigate }) {
       </div>
 
       {/* Search */}
-      <div className="sidebar__search-wrap">
+      <div className="sidebar__search-wrap" role="search">
         <svg className="sidebar__search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
         </svg>
         <input
           className="sidebar__search"
           placeholder="Search..."
+          aria-label="Search menu"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
       {/* Nav */}
-      <nav className="sidebar__nav">
+      <nav className="sidebar__nav" role="navigation" aria-label="Application menu">
         {navConfig.map(({ section, page, icon, items }) => {
           // If item has a page property, it's a direct navigate item (like Live View or About)
           if (page) {
@@ -76,6 +77,7 @@ export default function Sidebar({ activePage, onNavigate }) {
                 key={section}
                 className={`sidebar__direct-item ${isActive ? "sidebar__direct-item--active" : ""}`}
                 onClick={() => onNavigate(page)}
+                aria-current={isActive ? "page" : undefined}
               >
                 <SvgIcon html={icon} />
                 <span className="sidebar__direct-item-label">{section}</span>
@@ -98,6 +100,8 @@ export default function Sidebar({ activePage, onNavigate }) {
               <button
                 className={`sidebar__group-btn ${hasActiveItem ? "sidebar__group-btn--active" : ""}`}
                 onClick={() => toggle(section)}
+                aria-expanded={expanded[section] ? "true" : "false"}
+                aria-controls={`group-${section.replace(/\s+/g, "-").toLowerCase()}`}
               >
                 <SvgIcon html={icon} />
                 <span className="sidebar__group-label">{section}</span>
@@ -106,7 +110,7 @@ export default function Sidebar({ activePage, onNavigate }) {
                 </svg>
               </button>
               {(expanded[section] || search) && (
-                <div className="sidebar__items">
+                <div className="sidebar__items" id={`group-${section.replace(/\s+/g, "-").toLowerCase()}`} role="group" aria-label={`${section} submenu`}>
                   {visible.map((item) => {
                     const isActive = activePage === item.page;
                     return (
@@ -114,6 +118,7 @@ export default function Sidebar({ activePage, onNavigate }) {
                         key={item.page}
                         className={`sidebar__item ${isActive ? "sidebar__item--active" : ""}`}
                         onClick={() => onNavigate(item.page)}
+                        aria-current={isActive ? "page" : undefined}
                       >
                         <SvgIcon html={item.icon} />
                         <span>{item.label}</span>
@@ -135,15 +140,15 @@ export default function Sidebar({ activePage, onNavigate }) {
             {user?.email?.charAt(0).toUpperCase()}
           </div>
           <div className="sidebar__user-details">
-            <div className="sidebar__user-email">{user?.email}</div>
-            <div className="sidebar__user-role">
-              {user?.role === "admin" ? "Administrator" : "Client"}
+            <div className="sidebar__user-email" title={user?.email}>{user?.email}</div>
+            <div className="sidebar__user-meta">
+              <span className={`sidebar__user-badge ${user?.role}`}>
+                {user?.role?.toUpperCase()}
+              </span>
+              {user?.loginDate && (
+                <span className="sidebar__user-login-date">{user.loginDate}</span>
+              )}
             </div>
-            {user?.loginDate && (
-              <div className="sidebar__user-login-date">
-                Logged in: {user.loginDate}
-              </div>
-            )}
           </div>
         </div>
         <button 
