@@ -166,19 +166,21 @@ function validateIP(ip) {
 
 export default function ManualSearchModal({ onClose, onEnroll }) {
   const [ip, setIp]         = useState("");
-  const [port, setPort]     = useState("80");
+  const [port, setPort]     = useState("");
   const [proto, setProto]   = useState("http");
   const [user, setUser]     = useState("");
   const [pass, setPass]     = useState("");
   const [probe, setProbe]   = useState("idle"); // idle | probing | success | fail
   const [discovered, setDiscovered] = useState(null);
+  const [detectedPort, setDetectedPort] = useState(null); // Track auto-detected port
   const [errors, setErrors] = useState({});
 
   const validate = () => {
     const e = {};
     if (!ip) e.ip = "IP address is required";
     else if (!validateIP(ip)) e.ip = "Invalid IP address";
-    if (!port || isNaN(port) || +port < 1 || +port > 65535) e.port = "1–65535";
+    // Port is optional - if provided, validate range
+    if (port && (isNaN(port) || +port < 1 || +port > 65535)) e.port = "1–65535";
     return e;
   };
 
@@ -200,6 +202,7 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
 
       if (json.success) {
         setProbe("success");
+        setDetectedPort(json.port || port); // Capture auto-detected port
         setDiscovered({
           manufacturer: json.manufacturer,
           model:        json.model,
@@ -210,15 +213,17 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
         });
       } else {
         setProbe("fail");
+        setDetectedPort(null);
       }
     } catch {
       setProbe("fail");
     }
   };
 
-  // ✅ pass is now included
+  // ✅ pass is now included, use detected port if available
   const handleEnroll = () => {
-    onEnroll?.({ ip, port, proto, user, pass, discovered });
+    const enrollPort = detectedPort || port || "80";
+    onEnroll?.({ ip, port: enrollPort, proto, user, pass, discovered });
     onClose?.();
   };
 
@@ -250,7 +255,13 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
               <div className="msm-proto-row">
                 {["http", "https", "rtsp"].map((p) => (
                   <button key={p} className={`msm-proto-btn ${proto === p ? "active" : ""}`}
-                    onClick={() => { setProto(p); setPort(p === "rtsp" ? "554" : p === "https" ? "443" : "80"); }}>
+                    onClick={() => { 
+                      setProto(p);
+                      // Only set port if user hasn't entered one
+                      if (!port) {
+                        setPort(p === "rtsp" ? "554" : p === "https" ? "443" : "");
+                      }
+                    }}>
                     {p.toUpperCase()}
                   </button>
                 ))}
@@ -268,9 +279,9 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
                 {errors.ip && <span className="msm-error-msg">{errors.ip}</span>}
               </div>
               <div className="msm-field msm-field--port">
-                <label className="msm-label">Port</label>
+                <label className="msm-label">Port <span style={{fontSize: "11px", fontWeight: "400", color: "#9ca3af"}}>(optional)</span></label>
                 <input className={`msm-input ${errors.port ? "error" : ""}`}
-                  placeholder="80" value={port}
+                  placeholder="Leave empty to auto-detect" value={port}
                   onChange={(e) => { setPort(e.target.value); setErrors((s) => ({ ...s, port: "" })); }}
                 />
                 {errors.port && <span className="msm-error-msg">{errors.port}</span>}
@@ -296,19 +307,19 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
             {probe === "idle" && (
               <div className="msm-probe">
                 <div className="msm-probe-dot" style={{ background: "#2e3d55" }} />
-                Enter IP, port and credentials, then probe the device.
+                Enter IP address and (optionally) port, then probe the device. Leave port empty to auto-detect.
               </div>
             )}
             {probe === "probing" && (
               <div className="msm-probe probing">
                 <div className="msm-spinner" />
-                Probing {ip}:{port} via ONVIF WS-Discovery…
+                Probing {ip}{port ? `:${port}` : " (auto-detecting ports)"} via ONVIF…
               </div>
             )}
             {probe === "fail" && (
               <div className="msm-probe fail">
                 <div className="msm-probe-dot" />
-                No ONVIF device found at {ip}:{port}. Check IP, port, or credentials.
+                No ONVIF device found at {ip}{port ? `:${port}` : " on standard ports"}. Check IP, port, or credentials.
               </div>
             )}
             {probe === "success" && discovered && (
@@ -316,6 +327,7 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
                 <div className="msm-probe success">
                   <div className="msm-probe-dot" />
                   ONVIF device discovered — {discovered.manufacturer} {discovered.model}
+                  {detectedPort && !port && <span style={{fontSize: "11px", color: "#60a5fa", marginLeft: "8px"}}>on port {detectedPort}</span>}
                 </div>
                 <div className="msm-info-grid">
                   {Object.entries(discovered).map(([k, v]) => (
