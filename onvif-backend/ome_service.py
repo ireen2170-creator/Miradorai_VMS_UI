@@ -7,12 +7,9 @@ OME_HOST = os.environ.get("OME_HOST", "mirador-ome")
 OME_PORT = os.environ.get("OME_PORT", "3333")
 WS_BASE = f"ws://{OME_HOST}:{OME_PORT}/app"
 
-# Token is ALREADY base64 encoded - do NOT encode again
-# "myVmsAccessToken" -> "bXl2bXNhY2Nlc3N0b2tlbg=="
-token = "bXl2bXNhY2Nlc3N0b2tlbg=="
+# OME API authentication is disabled for local Docker network access
 
 headers = {
-    "Authorization": f"Basic {token}",
     "Content-Type": "application/json"
 }
 

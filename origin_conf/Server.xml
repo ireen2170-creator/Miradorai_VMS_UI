@@ -45,7 +45,7 @@
             </Names>
         </Host>
         <API>
-            <AccessToken>bXl2bXNhY2Nlc3N0b2tlbg==</AccessToken>
+            <!-- AccessToken authentication disabled for local Docker network access -->
         </API>
     </Managers>
 

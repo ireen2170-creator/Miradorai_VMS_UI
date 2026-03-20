@@ -305,14 +305,27 @@ async def discover_devices(username: str = "", password: str = "", subnet: str =
         all_devices = discovered_devices + known_devices_formatted
         
         # Deduplicate by IP address, keeping discovered over known
-        seen_ips = set()
-        unique_devices = []
+        # Also prefer devices with better names (not "Camera @ IP" format)
+        seen_ips = {}
         for dev in all_devices:
             ip = dev.get('ip', '')
-            if ip and ip not in seen_ips:
-                seen_ips.add(ip)
-                unique_devices.append(dev)
+            if not ip:
+                continue
+            
+            if ip not in seen_ips:
+                seen_ips[ip] = dev
+            else:
+                # If we've seen this IP, prefer the one with a better name
+                existing = seen_ips[ip]
+                new_name = dev.get('name', '')
+                existing_name = existing.get('name', '')
+                
+                # Prefer devices with manufacturer info
+                if dev.get('manufacturer') and dev['manufacturer'] != 'Unknown':
+                    if not existing.get('manufacturer') or existing['manufacturer'] == 'Unknown':
+                        seen_ips[ip] = dev
         
+        unique_devices = list(seen_ips.values())
         print(f"[DISCOVERY] Merged to {len(unique_devices)} total device(s)")
         
         return {
