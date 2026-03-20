@@ -257,10 +257,9 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
                   <button key={p} className={`msm-proto-btn ${proto === p ? "active" : ""}`}
                     onClick={() => { 
                       setProto(p);
-                      // Only set port if user hasn't entered one
-                      if (!port) {
-                        setPort(p === "rtsp" ? "554" : p === "https" ? "443" : "");
-                      }
+                      // Always clear port when switching protocols (let user set custom port if needed)
+                      // This ensures HTTP doesn't keep old HTTPS port
+                      setPort("");
                     }}>
                     {p.toUpperCase()}
                   </button>
