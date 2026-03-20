@@ -216,6 +216,97 @@ async def onvif_probe(req: ProbeRequest):
 
 
 # ------------------------------------------------------------------
+# NEW: Register camera stream by direct RTSP URL (no ONVIF needed)
+# ------------------------------------------------------------------
+@app.post("/api/streams/register-direct")
+async def register_stream_direct(req: StreamRegisterRequest):
+    """
+    Register a camera stream directly by RTSP URL.
+    Perfect for cameras that don't support ONVIF (e.g., Axis in non-ONVIF mode).
+    
+    Request body:
+      rtsp_url: "rtsp://user:pass@192.168.126.234:554/axis-media/media.amp"
+    """
+    rtsp_url = req.rtsp_url.strip()
+    
+    if not rtsp_url:
+        return {"success": False, "error": "RTSP URL is required"}
+    
+    if not rtsp_url.lower().startswith("rtsp://"):
+        return {"success": False, "error": "URL must start with rtsp://"}
+    
+    # Extract IP from URL for stream naming
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(rtsp_url)
+        ip = parsed.hostname or "unknown"
+        stream_name = ip.replace(".", "_")
+        
+        print(f"[STREAM] Registering direct stream for {ip}: {rtsp_url}")
+        
+        # Register with OME
+        ome_response = register_stream(stream_name, rtsp_url)
+        print(f"[STREAM] OME response: {ome_response}")
+        
+        if ome_response and ome_response.get("statusCode") == 200:
+            # Save to devices list
+            existing = next((d for d in devices if d.get("ip") == ip), None)
+            
+            if not existing:
+                new_device = {
+                    "ip": ip,
+                    "ome_stream": stream_name,
+                    "rtsp_url": rtsp_url,
+                    "method": "direct_url"
+                }
+                devices.append(new_device)
+                save_devices(devices)
+            else:
+                existing["rtsp_url"] = rtsp_url
+                save_devices(devices)
+            
+            # Try to save to MongoDB
+            try:
+                cameras_col.update_one(
+                    {"ip": ip},
+                    {"$set": {
+                        "ip": ip,
+                        "ome_stream": stream_name,
+                        "rtsp_url": rtsp_url,
+                        "manufacturer": "Manual",
+                        "model": "Direct Stream",
+                        "added_at": datetime.utcnow(),
+                        "status": "streaming",
+                        "method": "direct_url"
+                    }},
+                    upsert=True
+                )
+                print(f"[MONGO] 📷 Camera saved: {ip}")
+            except Exception as e:
+                print(f"[MONGO] ⚠ Save failed: {e}")
+            
+            # Start recording
+            recorder.start_camera(stream_name, rtsp_url)
+            
+            from ome_service import get_ws_url
+            return {
+                "success": True,
+                "ip": ip,
+                "ome_stream": stream_name,
+                "rtsp_url": rtsp_url,
+                "ws_url": get_ws_url(stream_name),
+                "status": "streaming",
+                "ome_response": ome_response
+            }
+        else:
+            return {"success": False, "error": f"OME registration failed: {ome_response}"}
+    
+    except Exception as e:
+        print(f"[STREAM] ❌ Error: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
+# ------------------------------------------------------------------
 # NEW: Discover ONVIF devices on network using WS-Discovery
 # ------------------------------------------------------------------
 # NEW: Discover ONVIF devices on network using WS-Discovery

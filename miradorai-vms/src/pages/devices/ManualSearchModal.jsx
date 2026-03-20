@@ -165,14 +165,20 @@ function validateIP(ip) {
 }
 
 export default function ManualSearchModal({ onClose, onEnroll }) {
+  const [mode, setMode]     = useState("onvif"); // onvif | direct
+  // ONVIF mode
   const [ip, setIp]         = useState("");
   const [port, setPort]     = useState("");
   const [proto, setProto]   = useState("http");
   const [user, setUser]     = useState("");
   const [pass, setPass]     = useState("");
+  // Direct URL mode
+  const [rtspUrl, setRtspUrl] = useState("");
+  const [urlLabel, setUrlLabel] = useState(""); // Optional label for the stream
+  // Shared state
   const [probe, setProbe]   = useState("idle"); // idle | probing | success | fail
   const [discovered, setDiscovered] = useState(null);
-  const [detectedPort, setDetectedPort] = useState(null); // Track auto-detected port
+  const [detectedPort, setDetectedPort] = useState(null);
   const [errors, setErrors] = useState({});
 
   const validate = () => {
@@ -182,6 +188,49 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
     // Port is optional - if provided, validate range
     if (port && (isNaN(port) || +port < 1 || +port > 65535)) e.port = "1–65535";
     return e;
+  };
+
+  const validateDirectUrl = () => {
+    const e = {};
+    if (!rtspUrl.trim()) e.rtspUrl = "RTSP URL is required";
+    else if (!rtspUrl.toLowerCase().startsWith("rtsp://")) e.rtspUrl = "URL must start with rtsp://";
+    return e;
+  };
+
+  const handleDirectUrl = async () => {
+    const e = validateDirectUrl();
+    if (Object.keys(e).length) { setErrors(e); return; }
+    setErrors({});
+    setProbe("probing");
+    setDiscovered(null);
+
+    try {
+      const res = await fetch("http://localhost:8000/api/streams/register-direct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rtsp_url: rtspUrl.trim() }),
+      });
+
+      const json = await res.json();
+
+      if (json.success) {
+        setProbe("success");
+        setDiscovered({
+          manufacturer: "Manual Entry",
+          model: urlLabel || "Direct Stream",
+          firmware: "N/A",
+          serial: json.ip || "N/A",
+          streams: rtspUrl,
+          ptz: "N/A",
+        });
+      } else {
+        setProbe("fail");
+        setErrors({ rtspUrl: json.error || "Failed to register stream" });
+      }
+    } catch (err) {
+      setProbe("fail");
+      setErrors({ rtspUrl: err.message });
+    }
   };
 
   const handleProbe = async () => {
@@ -222,8 +271,13 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
 
   // ✅ pass is now included, use detected port if available
   const handleEnroll = () => {
-    const enrollPort = detectedPort || port || "80";
-    onEnroll?.({ ip, port: enrollPort, proto, user, pass, discovered });
+    if (mode === "onvif") {
+      const enrollPort = detectedPort || port || "80";
+      onEnroll?.({ ip, port: enrollPort, proto, user, pass, discovered });
+    } else {
+      // Direct URL mode
+      onEnroll?.({ rtspUrl, label: urlLabel, discovered });
+    }
     onClose?.();
   };
 
@@ -249,6 +303,27 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
           {/* Body */}
           <div className="msm-body">
 
+            {/* Mode Selector */}
+            <div className="msm-field" style={{marginBottom: "16px"}}>
+              <span className="msm-label">Connection Method</span>
+              <div className="msm-proto-row">
+                <button 
+                  className={`msm-proto-btn ${mode === "onvif" ? "active" : ""}`}
+                  onClick={() => { setMode("onvif"); setProbe("idle"); setErrors({}); }}
+                >
+                  ONVIF Probe
+                </button>
+                <button 
+                  className={`msm-proto-btn ${mode === "direct" ? "active" : ""}`}
+                  onClick={() => { setMode("direct"); setProbe("idle"); setErrors({}); }}
+                >
+                  Direct RTSP URL
+                </button>
+              </div>
+            </div>
+
+            {mode === "onvif" ? (
+              <>
             {/* Protocol */}
             <div className="msm-field">
               <span className="msm-label">Protocol</span>
@@ -301,24 +376,54 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
                   onChange={(e) => setPass(e.target.value)} />
               </div>
             </div>
+              </>
+            ) : (
+              <>
+            {/* Direct RTSP URL Mode */}
+            <div className="msm-field">
+              <label className="msm-label">RTSP Stream URL</label>
+              <input className={`msm-input ${errors.rtspUrl ? "error" : ""}`}
+                placeholder="rtsp://user:pass@192.168.126.234:554/axis-media/media.amp"
+                value={rtspUrl}
+                onChange={(e) => { setRtspUrl(e.target.value); setErrors((s) => ({ ...s, rtspUrl: "" })); setProbe("idle"); setDiscovered(null); }}
+              />
+              {errors.rtspUrl && <span className="msm-error-msg">{errors.rtspUrl}</span>}
+            </div>
+
+            <div className="msm-field">
+              <label className="msm-label">Stream Label <span style={{fontSize: "11px", fontWeight: "400", color: "#9ca3af"}}>(optional)</span></label>
+              <input className="msm-input"
+                placeholder="e.g., Lobby Entrance"
+                value={urlLabel}
+                onChange={(e) => setUrlLabel(e.target.value)}
+              />
+            </div>
+              </>
+            )}
 
             {/* Probe status */}
             {probe === "idle" && (
               <div className="msm-probe">
                 <div className="msm-probe-dot" style={{ background: "#2e3d55" }} />
-                Enter IP address and (optionally) port, then probe the device. Leave port empty to auto-detect.
+                {mode === "onvif" 
+                  ? "Enter IP address and (optionally) port, then probe the device. Leave port empty to auto-detect."
+                  : "Enter your camera's RTSP stream URL to add it manually."}
               </div>
             )}
             {probe === "probing" && (
               <div className="msm-probe probing">
                 <div className="msm-spinner" />
-                Probing {ip}{port ? `:${port}` : " (auto-detecting ports)"} via ONVIF…
+                {mode === "onvif" 
+                  ? `Probing ${ip}${port ? `:${port}` : " (auto-detecting ports)"} via ONVIF…`
+                  : "Registering stream with OME…"}
               </div>
             )}
             {probe === "fail" && (
               <div className="msm-probe fail">
                 <div className="msm-probe-dot" />
-                No ONVIF device found at {ip}{port ? `:${port}` : " on standard ports"}. Check IP, port, or credentials.
+                {mode === "onvif"
+                  ? `No ONVIF device found at ${ip}${port ? `:${port}` : " on standard ports"}. Check IP, port, or credentials.`
+                  : "Failed to register stream. Check the RTSP URL and try again."}
               </div>
             )}
             {probe === "success" && discovered && (
@@ -343,9 +448,11 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
           {/* Footer */}
           <div className="msm-footer">
             <button className="msm-btn msm-btn--ghost" onClick={onClose}>Cancel</button>
-            <button className="msm-btn msm-btn--probe" onClick={handleProbe}
+            <button className="msm-btn msm-btn--probe" onClick={mode === "onvif" ? handleProbe : handleDirectUrl}
               disabled={probe === "probing"}>
-              {probe === "probing" ? "Probing…" : "Probe via ONVIF"}
+              {probe === "probing" 
+                ? (mode === "onvif" ? "Probing…" : "Registering…")
+                : (mode === "onvif" ? "Probe via ONVIF" : "Register Stream")}
             </button>
             <button className="msm-btn msm-btn--enroll" onClick={handleEnroll}
               disabled={probe !== "success"}>
