@@ -340,7 +340,7 @@ export default function MediaPlayerPage() {
               </label>
               <input
                 type="file"
-                accept="video/*,.mp4,.mkv,.avi,.mov"
+                accept="video/*,.mp4,.mkv,.avi,.mov,.enc"
                 onChange={handleFileSelection}
                 style={{
                   display: "block",
