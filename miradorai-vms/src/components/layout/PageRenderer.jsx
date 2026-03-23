@@ -27,6 +27,7 @@ import SmartSearchSettingsPage from "../../pages/smartsearcxh/Smartsearchsetting
 import LiveViewPage            from "../../pages/liveview/LiveViewPage";
 import MediaPlayerPage         from "../../pages/admin/MediaPlayerPage";
 
+
 const MAP = {
   "add-devices":          AddDevicesPage,
   "cameras":              CamerasPage,
@@ -55,6 +56,8 @@ const MAP = {
   "live-view":            LiveViewPage,
   "profile":              ProfilePage,
   "media-player":         MediaPlayerPage,
+  
+
 };
 
 // These pages require admin role
@@ -72,3 +75,4 @@ export default function PageRenderer({ activePage, onCameraSelect }) {
   const Component = MAP[activePage] || AddDevicesPage;
   return <Component onCameraSelect={onCameraSelect} />;
 }
+
