@@ -34,21 +34,7 @@ export default function MediaPlayerPage() {
   const videoRef    = useRef(null);
   const playerWrap  = useRef(null);
 
-  // Admin guard – now after all hooks
-  if (user?.role !== "admin") {
-    return (
-      <div className="mp-access-denied">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48">
-          <rect x="3" y="11" width="18" height="11" rx="2"/>
-          <path d="M7 11V7a5 5 0 0110 0v4"/>
-        </svg>
-        <p>Admin access required</p>
-        <span>This page is only accessible to administrators.</span>
-      </div>
-    );
-  }
-
-  // ── All useEffect hooks MUST come here, before any functions ──────
+  // ── All useEffect hooks MUST come here, BEFORE any conditional returns ──────
   // ── Fetch available recording cameras ───────────────────────────
   useEffect(() => {
     const fetchRecordingCameras = async () => {
@@ -205,26 +191,64 @@ export default function MediaPlayerPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    const fileUrl = URL.createObjectURL(file);
-    setSelectedCustomFile({
-      name: file.name,
-      url: fileUrl,
-      size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
-      isCustom: true,
-    });
-    setPlayingFile({
-      name: file.name,
-      url: fileUrl,
-      size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
-      isCustom: true,
-    });
-    
-    setTimeout(() => {
-      if (videoRef.current) {
-        videoRef.current.load();
-        videoRef.current.play().catch(() => {});
-      }
-    }, 100);
+    // Check if file is encrypted (.enc)
+    if (file.name.endsWith(".enc")) {
+      // Send to backend for decryption
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      setLoadingFiles(true);
+      fetch(`${STREAM_API}/api/recordings/decrypt-file`, {
+        method: "POST",
+        body: formData,
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`Decryption failed: ${res.status}`);
+          return res.blob();
+        })
+        .then((decryptedBlob) => {
+          const fileUrl = URL.createObjectURL(decryptedBlob);
+          const decryptedFile = {
+            name: file.name.replace(".enc", ".mp4"),
+            url: fileUrl,
+            size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+            isCustom: true,
+            isEncrypted: true,
+          };
+          setSelectedCustomFile(decryptedFile);
+          setPlayingFile(decryptedFile);
+          
+          setTimeout(() => {
+            if (videoRef.current) {
+              videoRef.current.load();
+              videoRef.current.play().catch(() => {});
+            }
+          }, 100);
+        })
+        .catch((err) => {
+          console.error("Failed to decrypt file:", err);
+          alert("Failed to decrypt .enc file. Make sure it was encrypted with the correct key.");
+        })
+        .finally(() => setLoadingFiles(false));
+    } else {
+      // Non-encrypted file - play directly
+      const fileUrl = URL.createObjectURL(file);
+      const customFile = {
+        name: file.name,
+        url: fileUrl,
+        size: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+        isCustom: true,
+      };
+      setSelectedCustomFile(customFile);
+      setPlayingFile(customFile);
+      
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.load();
+          videoRef.current.play().catch(() => {});
+        }
+      }, 100);
+    }
   };
 
   const fmt = (s) => {
@@ -258,6 +282,18 @@ export default function MediaPlayerPage() {
 
   return (
     <div className="mp-shell">
+      {/* Admin guard */}
+      {user?.role !== "admin" ? (
+        <div className="mp-access-denied">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48">
+            <rect x="3" y="11" width="18" height="11" rx="2"/>
+            <path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+          <p>Admin access required</p>
+          <span>This page is only accessible to administrators.</span>
+        </div>
+      ) : (
+        <>
       {/* ── Left Panel ─────────────────────────────────── */}
       <div className="mp-left">
         <div className="mp-left-header">
@@ -636,6 +672,8 @@ export default function MediaPlayerPage() {
           <button className="mp-rtsp-btn" onClick={playRtsp}>▶ Play</button>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

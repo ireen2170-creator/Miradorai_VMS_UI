@@ -26,6 +26,7 @@ export default [
         WebSocket: "readonly",
         URL: "readonly",
         URLSearchParams: "readonly",
+        FormData: "readonly",
         setTimeout: "readonly",
         clearTimeout: "readonly",
         setInterval: "readonly",
