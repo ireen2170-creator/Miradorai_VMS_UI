@@ -2,6 +2,7 @@ services:
   ome:
     image: airensoft/ovenmediaengine:latest
     container_name: mirador-ome
+    stop_grace_period: 1s
     restart: unless-stopped
     ports:
       - "1935:1935"
@@ -19,6 +20,7 @@ services:
   mongo:
     image: mongo:7
     container_name: mirador-mongo
+    stop_grace_period: 1s
     restart: unless-stopped
     ports:
       - "27017:27017"
@@ -30,6 +32,7 @@ services:
   backend:
     build: ./onvif-backend
     container_name: mirador-backend
+    stop_grace_period: 1s
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -51,6 +54,8 @@ services:
       - mongo
     networks:
       - vmsnet
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   mongo_data:

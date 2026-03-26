@@ -1,5 +1,7 @@
 from onvif import ONVIFCamera
 import asyncio
+import socket
+import time
 
 def probe_camera(ip: str, port: int, username: str, password: str) -> dict:
     """
@@ -21,6 +23,15 @@ def probe_camera(ip: str, port: int, username: str, password: str) -> dict:
     for attempt_port in ports_to_try:
         try:
             print(f"[ONVIF] Attempting connection to {ip}:{attempt_port}")
+            
+            # Quick port check first to avoid hanging on closed ports
+            if not _is_port_open(ip, attempt_port, timeout=2):
+                print(f"[ONVIF] Port {attempt_port} is closed on {ip}")
+                continue
+            
+            # Set socket timeout to prevent hanging
+            socket.setdefaulttimeout(10)  # 10 second timeout for all socket operations
+            
             cam = ONVIFCamera(ip, attempt_port, username, password)
 
             # ── Device Information ──────────────────────────────────────
@@ -87,6 +98,17 @@ def probe_camera(ip: str, port: int, username: str, password: str) -> dict:
         "success": False,
         "error":   f"No ONVIF device found on {ip}. Tried ports: {ports_to_try}",
     }
+
+def _is_port_open(ip: str, port: int, timeout: float = 3.0) -> bool:
+    """Quickly check if a port is open to avoid hanging on closed ports."""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        result = sock.connect_ex((ip, port))
+        sock.close()
+        return result == 0
+    except Exception:
+        return False
 
 def move_camera_ptz(ip: str, port: int, username: str, password: str,
                     pan: float, tilt: float, zoom: float) -> dict:

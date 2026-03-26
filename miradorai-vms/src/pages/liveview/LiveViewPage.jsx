@@ -154,7 +154,10 @@ function CameraCell({ device, onFullscreen }) {
       </div>
       <div className="lv-cam__player">
         {device.ws_url
-          ? <WebRTCPlayer serverUrl={device.ws_url} />
+          ? <WebRTCPlayer
+              key={device.ws_url}
+              serverUrl={device.ws_url}
+            />
           : <div className="lv-no-stream">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" width="32" height="32">
                 <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>

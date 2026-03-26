@@ -23,6 +23,7 @@ from datetime import datetime
 RECORDINGS_DIR  = os.environ.get("RECORDINGS_DIR", "/recordings")
 CHUNK_SECONDS   = int(os.environ.get("CHUNK_SECONDS", "300"))   # 5 minutes
 FFMPEG_BIN      = os.environ.get("FFMPEG_BIN", "ffmpeg")
+FORCE_H264     = os.environ.get("FORCE_H264", "1") == "1"
 
 # Active recorder threads keyed by stream_name
 _recorders: dict[str, threading.Thread] = {}
@@ -58,7 +59,19 @@ def _record_loop(stream_name: str, rtsp_url: str, stop_event: threading.Event):
             "-rtsp_transport", "tcp",          # more reliable over TCP
             "-i",          rtsp_url,
             "-t",          str(CHUNK_SECONDS),  # stop after N seconds
-            "-c:v",        "copy",              # copy video stream as-is, no re-encode
+        ]
+
+        if FORCE_H264:
+            cmd += [
+                "-c:v",       "libx264",        # ensure browser compatibility
+                "-preset",    "veryfast",
+                "-crf",       "23",
+                "-x264opts",  "no-scenecut",
+            ]
+        else:
+            cmd += ["-c:v", "copy"]
+
+        cmd += [
             "-an",                              # drop audio (avoids codec compatibility issues)
             "-movflags",   "+faststart",        # MP4 moov atom at front
             "-y",                               # overwrite if exists

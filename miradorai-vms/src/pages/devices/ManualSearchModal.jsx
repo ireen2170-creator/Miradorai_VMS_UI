@@ -241,11 +241,18 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
     setDiscovered(null);
 
     try {
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+
       const res = await fetch("http://localhost:8000/api/onvif/probe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ip, port: Number(port), username: user, password: pass }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const json = await res.json();
 
@@ -264,8 +271,14 @@ export default function ManualSearchModal({ onClose, onEnroll }) {
         setProbe("fail");
         setDetectedPort(null);
       }
-    } catch {
-      setProbe("fail");
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        setProbe("fail");
+        setErrors({ ip: "Probe timeout - camera may be offline or not responding" });
+      } else {
+        setProbe("fail");
+        setErrors({ ip: "Failed to connect to camera" });
+      }
     }
   };
 

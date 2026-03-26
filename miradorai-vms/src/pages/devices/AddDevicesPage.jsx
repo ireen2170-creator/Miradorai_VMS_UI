@@ -215,86 +215,66 @@ export default function AddDevicesPage() {
     setChecked((prev) => prev.filter((id) => id !== deviceId));
   }, [setDevices]);
 
+  // ── Called by DiscoveryModal after it has already registered streams with OME
+  // The results already contain ws_url, stream_key, stream_status — no need to
+  // call /api/streams/register again here.
   const handleDiscoveredDevices = useCallback((discoveredDevices) => {
     if (!discoveredDevices || discoveredDevices.length === 0) return;
-    
-    setEnrolling(true);
-    setEnrollMsg(`Adding ${discoveredDevices.length} device${discoveredDevices.length > 1 ? 's' : ''}…`);
-    setShowDiscovery(false);
 
-    // Process each discovered device
-    (async () => {
+    const successful = discoveredDevices.filter((d) => d.ws_url);
+    const failed     = discoveredDevices.filter((d) => !d.ws_url);
+
+    if (failed.length > 0) {
+      console.warn(
+        `[AddDevices] ${failed.length} device(s) failed OME registration:`,
+        failed.map((d) => `${d.ip} — ${d.stream_status}`)
+      );
+    }
+
+    setDevices((prev) => {
+      let next = [...prev];
+
       for (const d of discoveredDevices) {
         const device = {
-          id:            String(Date.now()) + Math.random(),
+          // Use a stable ID so duplicate IPs update rather than duplicate
+          id:            d.id || `device-${d.ip}-${Date.now()}`,
           type:          "entrance",
-          name:          d.name || `${d.manufacturer} ${d.model}` || `Camera @ ${d.ip}`,
+          name:          d.name || `${d.manufacturer || ""} ${d.model || ""}`.trim() || `Camera @ ${d.ip}`,
           ip:            d.ip,
-          mac:           d.mac || "—",
-          status:        "Online",
+          mac:           d.mac          || "—",
+          // ── These come directly from /api/streams/register response ──────
+          status:        d.ws_url ? "Online" : "Offline",
           manufacturer:  d.manufacturer || "Unknown",
-          model:         d.model || "Unknown",
-          rtsp_url:      d.rtsp_url || null,
-          stream_uri:    d.stream_uri || null,
-          ws_url:        null,
-          stream_key:    null,
-          stream_status: "pending",
-          source:        "onvif",
+          model:         d.model        || "Unknown",
+          rtsp_url:      d.rtsp_url     || null,
+          ws_url:        d.ws_url       || null,
+          stream_key:    d.stream_key   || null,
+          stream_status: d.ws_url ? "streaming" : (d.stream_status || "not_registered"),
+          source:        "discovery",
         };
 
-        // If device has RTSP URL, register it with OME
-        if (d.rtsp_url) {
-          try {
-            const registerRes = await fetch(`${STREAM_API}/api/streams/register`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ rtsp_url: d.rtsp_url }),
-            });
-
-            if (registerRes.ok) {
-              const registerData = await registerRes.json();
-              device.ws_url = registerData.ws_url || null;
-              device.stream_key = registerData.stream_key || null;
-              device.stream_status = registerData.status || (registerData.ws_url ? "streaming" : "pending");
-              device.status = registerData.ws_url ? "Online" : "Offline";
-              console.log(`[AddDevices] Registered ${d.ip} with OME`);
-            } else {
-              device.stream_status = "not_registered";
-              device.status = "Offline";
-              console.log(`[AddDevices] Registration failed for ${d.ip}: ${registerRes.status}`);
-            }
-          } catch (err) {
-            device.stream_status = "not_registered";
-            device.status = "Offline";
-            console.log(`[AddDevices] Could not register ${d.ip}:`, err.message);
-          }
+        const existingIndex = next.findIndex((item) => item.ip === d.ip);
+        if (existingIndex !== -1) {
+          // Update existing row — preserve any manually set fields like name
+          next[existingIndex] = { ...next[existingIndex], ...device };
+          console.log(`[AddDevices] Updated: ${d.ip} ws_url=${d.ws_url || "none"}`);
+        } else {
+          next.push(device);
+          console.log(`[AddDevices] Added: ${d.ip} ws_url=${d.ws_url || "none"}`);
         }
-
-        setDevices((prev) => {
-          // avoid duplicate entries by IP
-          const existingIndex = prev.findIndex((item) => item.ip === device.ip);
-          if (existingIndex !== -1) {
-            const next = [...prev];
-            next[existingIndex] = { ...next[existingIndex], ...device };
-            return next;
-          }
-          return [...prev, device];
-        });
       }
-      
-      setTimeout(() => {
-        setEnrolling(false);
-        setEnrollMsg("");
-      }, 1000);
-    })();
+
+      return next;
+    });
   }, [setDevices]);
 
+  // ── Enroll button in the table footer (re-probes selected devices) ──────────
   const handleEnrollSelected = async () => {
     const devicesToEnroll = devices.filter((d) => checked.includes(d.id));
     if (devicesToEnroll.length === 0) return;
 
     setEnrolling(true);
-    setEnrollMsg(`Enrolling ${devicesToEnroll.length} device${devicesToEnroll.length > 1 ? 's' : ''}…`);
+    setEnrollMsg(`Enrolling ${devicesToEnroll.length} device${devicesToEnroll.length > 1 ? "s" : ""}…`);
 
     for (const device of devicesToEnroll) {
       await handleEnroll(device);
@@ -305,6 +285,7 @@ export default function AddDevicesPage() {
     setChecked([]);
   };
 
+  // ── Called by ManualSearchModal on confirm ───────────────────────────────────
   const handleEnroll = async (device) => {
     setEnrolling(true);
     setEnrollMsg("Registering stream with OME…");
@@ -322,26 +303,37 @@ export default function AddDevicesPage() {
     });
     const probeData = probeRes.ok ? await probeRes.json() : null;
 
-    setDevices((prev) => [...prev, {
-      id:            String(Date.now()),
-      type:          "entrance",
-      name,
-      ip,
-      mac:           discovered?.mac          || "—",
-      status:        probeData?.ws_url ? "Online" : "Offline",
-      manufacturer:  discovered?.manufacturer || "Unknown",
-      model:         discovered?.model        || "Unknown",
-      rtsp_url:      probeData?.stream_uri    || null,
-      ws_url:        probeData?.ws_url        || null,
-      stream_key:    probeData?.stream_key    || null,
-      stream_status: probeData?.status        || "error",
-      source:        "onvif",
-    }]);
+    setDevices((prev) => {
+      const existingIndex = prev.findIndex((item) => item.ip === ip);
+      const updated = {
+        id:            String(Date.now()),
+        type:          "entrance",
+        name,
+        ip,
+        mac:           discovered?.mac          || "—",
+        status:        probeData?.ws_url ? "Online" : "Offline",
+        manufacturer:  discovered?.manufacturer || "Unknown",
+        model:         discovered?.model        || "Unknown",
+        rtsp_url:      probeData?.stream_uri    || null,
+        ws_url:        probeData?.ws_url        || null,
+        stream_key:    probeData?.stream_key    || null,
+        stream_status: probeData?.status        || "error",
+        source:        "onvif",
+      };
+
+      if (existingIndex !== -1) {
+        const next = [...prev];
+        next[existingIndex] = { ...next[existingIndex], ...updated };
+        return next;
+      }
+      return [...prev, updated];
+    });
 
     setEnrolling(false);
     setEnrollMsg("");
   };
 
+  // ── Called by StreamURLModal ─────────────────────────────────────────────────
   const handleAddStreamURLs = async (urls) => {
     setShowStreamURL(false);
     setEnrolling(true);
@@ -350,50 +342,58 @@ export default function AddDevicesPage() {
       const url = urls[i];
       setEnrollMsg(`Registering stream ${i + 1} of ${urls.length}…`);
 
+      let ip = "—";
+      try { ip = new URL(url).hostname; } catch {}
+
       try {
-        const res = await fetch(`${STREAM_API}/api/streams/register`, {
+        const res  = await fetch(`${STREAM_API}/api/streams/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ rtsp_url: url }),
         });
         const data = res.ok ? await res.json() : null;
 
-        let ip = "—";
-        try { ip = new URL(url).hostname; } catch {}
-
-        setDevices((prev) => [...prev, {
-          id:            String(Date.now()) + i,
-          type:          "entrance",
-          name:          `Stream @ ${ip}`,
-          ip,
-          mac:           "—",
-          status:        data?.ws_url ? "Online" : "Offline",
-          manufacturer:  "Unknown",
-          model:         "Unknown",
-          rtsp_url:      url,
-          ws_url:        data?.ws_url        || null,
-          stream_key:    data?.stream_key    || null,
-          stream_status: data?.status        || (data?.ws_url ? "streaming" : "error"),
-          source:        "rtsp",
-        }]);
+        setDevices((prev) => {
+          const existingIndex = prev.findIndex((item) => item.ip === ip);
+          const entry = {
+            id:            String(Date.now()) + i,
+            type:          "entrance",
+            name:          `Stream @ ${ip}`,
+            ip,
+            mac:           "—",
+            status:        data?.ws_url ? "Online" : "Offline",
+            manufacturer:  "Unknown",
+            model:         "Unknown",
+            rtsp_url:      url,
+            ws_url:        data?.ws_url     || null,
+            stream_key:    data?.stream_key || null,
+            stream_status: data?.ws_url ? "streaming" : "error",
+            source:        "rtsp",
+          };
+          if (existingIndex !== -1) {
+            const next = [...prev];
+            next[existingIndex] = { ...next[existingIndex], ...entry };
+            return next;
+          }
+          return [...prev, entry];
+        });
       } catch {
-        let ip = "—";
-        try { ip = new URL(url).hostname; } catch {}
-        setDevices((prev) => [...prev, {
-          id:            String(Date.now()) + i,
-          type:          "entrance",
-          name:          `Stream @ ${ip}`,
-          ip,
-          mac:           "—",
-          status:        "Offline",
-          manufacturer:  "Unknown",
-          model:         "Unknown",
-          rtsp_url:      url,
-          ws_url:        null,
-          stream_key:    null,
-          stream_status: "error",
-          source:        "rtsp",
-        }]);
+        setDevices((prev) => {
+          const existingIndex = prev.findIndex((item) => item.ip === ip);
+          const entry = {
+            id: String(Date.now()) + i, type: "entrance",
+            name: `Stream @ ${ip}`, ip, mac: "—",
+            status: "Offline", manufacturer: "Unknown", model: "Unknown",
+            rtsp_url: url, ws_url: null, stream_key: null,
+            stream_status: "error", source: "rtsp",
+          };
+          if (existingIndex !== -1) {
+            const next = [...prev];
+            next[existingIndex] = { ...next[existingIndex], ...entry };
+            return next;
+          }
+          return [...prev, entry];
+        });
       }
     }
 
@@ -431,7 +431,7 @@ export default function AddDevicesPage() {
           />
         </div>
       </div>
-{/* XDJKFBK */}
+
       <div className="add-dev__options-bar">
         <div className="add-dev__toggle-row">
           <Toggle value={includePrerecorded} onChange={setInclude} />
@@ -441,15 +441,7 @@ export default function AddDevicesPage() {
       </div>
 
       <div className="add-dev__info-pill">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          width="13"
-          height="13"
-          style={{ flexShrink: 0 }}
-        >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="13" height="13" style={{ flexShrink: 0 }}>
           <circle cx="12" cy="12" r="10"/>
           <path d="M12 8h.01M12 12v4"/>
         </svg>
@@ -525,7 +517,11 @@ export default function AddDevicesPage() {
         <ManualSearchModal onClose={() => setShowManualSearch(false)} onEnroll={handleEnroll} />
       )}
       {showDiscovery && (
-        <DiscoveryModal isOpen={showDiscovery} onClose={() => setShowDiscovery(false)} onAddDevices={handleDiscoveredDevices} />
+        <DiscoveryModal
+          isOpen={showDiscovery}
+          onClose={() => setShowDiscovery(false)}
+          onAddDevices={handleDiscoveredDevices}
+        />
       )}
       {showStreamURL && (
         <StreamURLModal onClose={() => setShowStreamURL(false)} onAdd={handleAddStreamURLs} />

@@ -49,15 +49,22 @@ def _load_key() -> bytes:
 
 
 def _decrypt(file_path: str) -> io.BytesIO:
-    key = _load_key()
     with open(file_path, "rb") as f:
         raw = f.read()
-    iv             = raw[:16]
-    cipher         = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    dec            = cipher.decryptor()
-    padded         = dec.update(raw[16:]) + dec.finalize()
-    unpadder       = padding.PKCS7(128).unpadder()
-    data           = unpadder.update(padded) + unpadder.finalize()
+    return decrypt_bytes(raw)
+
+
+def decrypt_bytes(raw: bytes) -> io.BytesIO:
+    if not raw or len(raw) <= 16:
+        raise ValueError("Encrypted payload must be larger than 16 bytes")
+    key = _load_key()
+    iv = raw[:16]
+    ciphertext = raw[16:]
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    dec = cipher.decryptor()
+    padded = dec.update(ciphertext) + dec.finalize()
+    unpadder = padding.PKCS7(128).unpadder()
+    data = unpadder.update(padded) + unpadder.finalize()
     return io.BytesIO(data)
 
 
