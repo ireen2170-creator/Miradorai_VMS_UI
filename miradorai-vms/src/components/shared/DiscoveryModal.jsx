@@ -5,21 +5,16 @@ const STREAM_API = "http://localhost:8000";
 
 export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
-  const [selectedDevices, setSelectedDevices]     = useState(new Set());
-  const [isScanning, setIsScanning]               = useState(false);
-  const [isRegistering, setIsRegistering]         = useState(false);
-  const [progress, setProgress]                   = useState(0);
-  const [statusMessage, setStatusMessage]         = useState("");
-  const [error, setError]                         = useState(null);
-  const [hasScanned, setHasScanned]               = useState(false);
+  const [selectedDevices, setSelectedDevices] = useState(new Set());
+  const [isScanning, setIsScanning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [statusMessage, setStatusMessage] = useState("Initializing network scan...");
+  const [error, setError] = useState(null);
+  const [hasScanned, setHasScanned] = useState(false);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
-  const [regStatus, setRegStatus]     = useState({});
-  const [showCredModal, setShowCredModal] = useState(false);
-  const [deviceCreds, setDeviceCreds] = useState({});
-
-  if (!isOpen) return null;
-
-  // ── Discovery — no subnet needed ─────────────────────────────────
+  // Simulate network discovery
   const startDiscovery = async () => {
     setIsScanning(true);
     setError(null);
@@ -43,20 +38,21 @@ export default function DiscoveryModal({ isOpen, onClose, onAddDevices }) {
       const response = await fetch(`${STREAM_API}/api/discover-devices`);
       setProgress(90);
 
-      if (response.ok) {
-        const data    = await response.json();
-        const devices = data.devices || [];
-        setDiscoveredDevices(devices);
-        setStatusMessage(`Found ${devices.length} camera${devices.length !== 1 ? "s" : ""}`);
-        if (devices.length === 0) setError("No cameras found on the network.");
-      } else {
-        setError("Discovery request failed.");
-        setStatusMessage("Discovery failed.");
+        if (response.ok) {
+          const data = await response.json();
+          devices = data.devices || [];
+          console.log("[Discovery] Backend returned:", devices);
+        } else {
+          console.log("[Discovery] Backend returned non-OK status:", response.status);
+        }
+      } catch (fetchErr) {
+        console.log("[Discovery] Backend API failed:", fetchErr.message);
       }
-    } catch (err) {
-      setError(err.message || "Failed to reach backend.");
-      setStatusMessage("Scan failed.");
-    } finally {
+
+      setDiscoveredDevices(devices);
+      setStatusMessage(
+        `Found ${data.devices?.length || 0} camera${data.devices?.length !== 1 ? "s" : ""}`
+      );
       setProgress(100);
       setHasScanned(true);
       setIsScanning(false);

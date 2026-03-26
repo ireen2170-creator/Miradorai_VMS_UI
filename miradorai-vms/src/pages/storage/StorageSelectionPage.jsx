@@ -39,6 +39,7 @@ export default function StorageSelectionPage() {
   useEffect(() => { fetchData(); }, []);
 
   // When row selected, populate panel
+  // eslint-disable react/no-direct-mutation-state
   useEffect(() => {
     const sel = rows.find(r => r.id === selected)?.raw;
     if (sel) {

@@ -15,7 +15,7 @@ Endpoints:
 
 import os
 import io
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pymongo import MongoClient
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -65,6 +65,18 @@ def decrypt_bytes(raw: bytes) -> io.BytesIO:
     padded = dec.update(ciphertext) + dec.finalize()
     unpadder = padding.PKCS7(128).unpadder()
     data = unpadder.update(padded) + unpadder.finalize()
+    return io.BytesIO(data)
+
+
+def _decrypt_bytes(encrypted_bytes: bytes) -> io.BytesIO:
+    """Decrypt bytes directly (for user-uploaded .enc files)."""
+    key = _load_key()
+    iv             = encrypted_bytes[:16]
+    cipher         = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    dec            = cipher.decryptor()
+    padded         = dec.update(encrypted_bytes[16:]) + dec.finalize()
+    unpadder       = padding.PKCS7(128).unpadder()
+    data           = unpadder.update(padded) + unpadder.finalize()
     return io.BytesIO(data)
 
 
@@ -146,6 +158,32 @@ def play_recording(
         raise HTTPException(status_code=500, detail=f"Decryption failed: {e}")
 
     return StreamingResponse(stream, media_type="video/mp4")
+
+
+@recording_router.post("/decrypt-file")
+async def decrypt_file(file: UploadFile = File(...)):
+    """
+    Decrypt a user-uploaded .enc file and return as MP4.
+    Used for playing encrypted video files from local storage.
+    """
+    try:
+        encrypted_data = await file.read()
+        decrypted_stream = _decrypt_bytes(encrypted_data)
+        
+        # Extract filename without extension for download
+        filename = file.filename or "video.mp4"
+        if filename.endswith(".enc"):
+            filename = filename[:-4] + ".mp4"
+        elif not filename.endswith(".mp4"):
+            filename = filename + ".mp4"
+        
+        return StreamingResponse(
+            decrypted_stream,
+            media_type="video/mp4",
+            headers={"Content-Disposition": f"inline; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Decryption failed: {str(e)}")
 
 
 @recording_router.get("/status")

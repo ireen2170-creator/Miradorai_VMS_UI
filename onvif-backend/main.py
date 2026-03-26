@@ -715,3 +715,36 @@ async def ptz_move(req: PTZMoveRequest):
         req.pan, req.tilt, req.zoom
     )
     return result
+
+@app.get("/api/recordings/{stream_name}")
+async def get_recordings(stream_name: str, date: str = ""):
+    recordings_dir = os.environ.get("RECORDINGS_DIR", "/recordings")
+    cam_dir = os.path.join(recordings_dir, stream_name)
+    if date:
+        cam_dir = os.path.join(cam_dir, date)
+    files = []
+    if os.path.exists(cam_dir):
+        for f in sorted(os.listdir(cam_dir)):
+            if f.endswith(".mp4"):
+                fp = os.path.join(cam_dir, f)
+                size = os.path.getsize(fp)
+                files.append({
+                    "name": f,
+                    "size": f"{round(size / (1024**2), 1)} MB",
+                    "path": fp,
+                })
+    return {"files": files, "count": len(files)}
+
+@app.get("/api/recordings/file/{stream_name}/{filename}")
+async def serve_recording(stream_name: str, filename: str):
+    from fastapi.responses import FileResponse
+    recordings_dir = os.environ.get("RECORDINGS_DIR", "/recordings")
+    # Search recursively for the file
+    for root, dirs, files in os.walk(os.path.join(recordings_dir, stream_name)):
+        if filename in files:
+            return FileResponse(
+                os.path.join(root, filename),
+                media_type="video/mp4",
+                headers={"Accept-Ranges": "bytes"}
+            )
+    raise HTTPException(status_code=404, detail="Recording not found")

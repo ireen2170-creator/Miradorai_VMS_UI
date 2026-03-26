@@ -32,6 +32,7 @@ export default function StorageManagementPage() {
       .finally(() => setLoading(false));
   };
 
+  // eslint-disable react/no-direct-mutation-state
   useEffect(() => { fetchStorage(); }, []);
 
   const sel = rows[selected] ?? null;
