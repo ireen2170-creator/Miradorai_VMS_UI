@@ -5,4 +5,8 @@ onvif-zeep
 pymongo
 watchdog
 cryptography
+<<<<<<< HEAD
 python-multipart
+=======
+python-multipart
+>>>>>>> 78912786884fc3d26ad130e4c125a00250d76595
