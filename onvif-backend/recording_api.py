@@ -34,7 +34,7 @@ KEY_FILE  = os.environ.get("VIDEO_KEY_FILE", "/app/data/video.key")
 # MongoDB
 # ------------------------------------------------------------------
 _client     = MongoClient(MONGO_URI)
-_db         = _client["vms_database"]
+_db         = _client["mirador-vms"]
 _collection = _db["recordings"]
 
 # ------------------------------------------------------------------
@@ -63,14 +63,26 @@ def _decrypt(file_path: str) -> io.BytesIO:
 
 def _decrypt_bytes(encrypted_bytes: bytes) -> io.BytesIO:
     """Decrypt bytes directly (for user-uploaded .enc files)."""
-    key = _load_key()
-    iv             = encrypted_bytes[:16]
-    cipher         = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
-    dec            = cipher.decryptor()
-    padded         = dec.update(encrypted_bytes[16:]) + dec.finalize()
-    unpadder       = padding.PKCS7(128).unpadder()
-    data           = unpadder.update(padded) + unpadder.finalize()
-    return io.BytesIO(data)
+    try:
+        key = _load_key()
+    except Exception as e:
+        print(f"[DECRYPT] Key load failed: {e}")
+        raise HTTPException(status_code=500, detail="Encryption key (video.key) not found on server.")
+
+    if len(encrypted_bytes) < 16:
+        raise HTTPException(status_code=400, detail="Invalid encrypted file (too small).")
+
+    try:
+        iv             = encrypted_bytes[:16]
+        cipher         = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+        dec            = cipher.decryptor()
+        padded         = dec.update(encrypted_bytes[16:]) + dec.finalize()
+        unpadder       = padding.PKCS7(128).unpadder()
+        data           = unpadder.update(padded) + unpadder.finalize()
+        return io.BytesIO(data)
+    except Exception as e:
+        print(f"[DECRYPT] Decryption failed (key mismatch or corrupt): {e}")
+        raise HTTPException(status_code=400, detail="Decryption failed. Check if your video.key matches the one used for encryption.")
 
 
 # ------------------------------------------------------------------
